@@ -1,0 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/sha3
+sha3.so
+sha3.dylib
+sha3.dll
+sha3.a
+sha3.lib
+sha3-test-*
+*.exe
+*.o
+*.obj
+*.lst
+dub.selections.json
