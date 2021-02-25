@@ -1,10 +1,6 @@
-/**
- * Computes SHA-3 hashes of arbitary data.
- *
- * References: NIST FIPS PUB 202
- *
- * License: BSL-1.0
- */
+/// Computes SHA-3 hashes of arbitary data.
+/// Reference: NIST FIPS PUB 202
+/// License: BSL-1.0
 module sha3d.sha3;
 
 private import std.digest;
@@ -27,13 +23,13 @@ private immutable int[24] K_PI = [
     15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
 ];
 
-/**
- * Template API SHA-3/SHAKE implementation using the Keccak[1600] function.
- * Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
- *
- * The digestSize parameter is in bits. However, it's easier to use the SHA3_224,
- * SHA3_256, SHA3_384, SHA3_512, SHAKE128, and SHAKE256 aliases.
- */
+/// Template API SHA-3/SHAKE implementation using the Keccak[1600] function.
+/// Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
+/// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128,
+/// and SHAKE256 aliases.
+/// Params:
+///   digestSize = Digest size in bits
+///   shake = Set to true for SHAKE; Otherwise false for SHA-3
 public struct KECCAK(uint digestSize, bool shake = false)
 {
     static if (shake)
@@ -46,7 +42,7 @@ public struct KECCAK(uint digestSize, bool shake = false)
 
     @safe @nogc pure nothrow:
 
-    enum blockSize = 1600 - digestSize * 2; /// sponge rate in bits
+    enum blockSize = 1600 - digestSize * 2; /// Sponge rate in bits
     private enum
     {
         digestSizeBytes = digestSize / 8, // digest size in bytes
@@ -58,7 +54,7 @@ public struct KECCAK(uint digestSize, bool shake = false)
     {
         private ubyte[200] st;  // state (8bit)
         private ulong[25] st64; // state (64bit)
-        private size_t[200 / size_t.sizeof] stz;
+        private size_t[200 / size_t.sizeof] stz; // state (size_t)
     }
 
     static assert(st64.sizeof == st.sizeof);
@@ -66,25 +62,18 @@ public struct KECCAK(uint digestSize, bool shake = false)
 
     private size_t pt; // left-over pointer
 
-    /**
-     * Initiates the structure. Begins the SHA-3/SHAKE operation.
-     *
-     * This is better used when restarting the operation (e.g.,
-     * for a file).
-     */
+    /// Initiates the structure. Begins the SHA-3/SHAKE operation.
+    /// This is better used when restarting the operation (e.g.,
+    /// for a file).
     void start()
     {
         this = typeof(this).init;
     }
 
-    /**
-     * Feed the algorithm with data.
-     *
-     * Also implements the $(REF isOutputRange, std,range,primitives)
-     * interface for `ubyte` and `const(ubyte)[]`.
-     *
-     * Params: input = Data input
-     */
+    /// Feed the algorithm with data
+    /// Also implements the $(REF isOutputRange, std,range,primitives)
+    /// interface for `ubyte` and `const(ubyte)[]`.
+    /// Params: input = Input data to digest
     void put(scope const(ubyte)[] input...) @trusted
     {
         size_t j = pt;
@@ -120,10 +109,8 @@ public struct KECCAK(uint digestSize, bool shake = false)
         pt = j;
     }
 
-    /**
-     * Returns the finished hash. This also clears part of the state,
-     * leaving just the final digest.
-     */
+    /// Returns the finished hash. This also clears part of the state,
+    /// leaving just the final digest.
     ubyte[digestSizeBytes] finish()
     {
         st[pt] ^= delim;
@@ -348,12 +335,18 @@ private:
         "BDD5167212D2DC69665F5A8875AB87F23D5CE7849132F56371A19096");
 }
 
-public alias SHA3_224 = KECCAK!(224, false); /// Alias for SHA3-224
-public alias SHA3_256 = KECCAK!(256, false); /// Alias for SHA3-256
-public alias SHA3_384 = KECCAK!(384, false); /// Alias for SHA3-384
-public alias SHA3_512 = KECCAK!(512, false); /// Alias for SHA3-512
-public alias SHAKE128 = KECCAK!(128, true);  /// Alias for SHAKE-128
-public alias SHAKE256 = KECCAK!(256, true);  /// Alias for SHAKE-256
+/// Alias for SHA-3-224. Recommended to use over the $(D KECCAK) structure.
+public alias SHA3_224 = KECCAK!(224, false);
+/// Alias for SHA-3-256. Recommended to use over the $(D KECCAK) structure.
+public alias SHA3_256 = KECCAK!(256, false);
+/// Alias for SHA-3-384. Recommended to use over the $(D KECCAK) structure.
+public alias SHA3_384 = KECCAK!(384, false);
+/// Alias for SHA-3-512. Recommended to use over the $(D KECCAK) structure.
+public alias SHA3_512 = KECCAK!(512, false);
+/// Alias for SHAKE-128. Recommended to use over the $(D KECCAK) structure.
+public alias SHAKE128 = KECCAK!(128, true);
+/// Alias for SHAKE-256. Recommended to use over the $(D KECCAK) structure.
+public alias SHAKE256 = KECCAK!(256, true);
 
 @safe unittest
 {
@@ -534,17 +527,17 @@ auto shake256Of(T...)(T data)
         ~"dfd13a"));
 }
 
-/**
- * OOP API SHA-3 implementations.
- * See `std.digest` for differences between template and OOP API.
- *
- * This is an alias for $(D $(REF WrapperDigest, std,digest)!SHA1), see
- * there for more information.
- */
-
-alias SHA3_224Digest = WrapperDigest!SHA3_224; /// Ditto
-alias SHA3_256Digest = WrapperDigest!SHA3_256; /// Ditto
-alias SHA3_384Digest = WrapperDigest!SHA3_384; /// Ditto
-alias SHA3_512Digest = WrapperDigest!SHA3_512; /// Ditto
-alias SHAKE128Digest = WrapperDigest!SHAKE128; /// Ditto
-alias SHAKE256Digest = WrapperDigest!SHAKE256; /// Ditto
+/// An OOP API SHA-3 implementation. See `std.digest` for differences between
+/// the templates and the OOP API. This is similar to
+/// $(D $(REF WrapperDigest, std,digest)!SHA1Digest).
+alias SHA3_224Digest = WrapperDigest!SHA3_224;
+/// ditto
+alias SHA3_256Digest = WrapperDigest!SHA3_256;
+/// ditto
+alias SHA3_384Digest = WrapperDigest!SHA3_384;
+/// ditto
+alias SHA3_512Digest = WrapperDigest!SHA3_512;
+/// ditto
+alias SHAKE128Digest = WrapperDigest!SHAKE128;
+/// ditto
+alias SHAKE256Digest = WrapperDigest!SHAKE256;
