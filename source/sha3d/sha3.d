@@ -285,27 +285,48 @@ private:
     }
 }
 
-///
+/// Test against empty datasets
 @safe unittest
 {
-    //Simple example, hashing a string using sha3_224Of helper function
-    ubyte[28] hash224 = sha3_224Of("abc");
-    //Let's get a hash string
-    assert(toHexString(hash224) == "E642824C3F8CF24AD09234EE7D3C766FC9A3A5168D0C94AD73B46FDF");
+    assert(toHexString(sha3_224Of("")) ==
+        "6B4E03423667DBB73B6E15454F0EB1ABD4597F9A1B078E3F5B5A6BC7");
 
-    //The same, but using SHA3-256
-    ubyte[32] hash256 = sha3_256Of("abc");
-    assert(toHexString(hash256) == "3A985DA74FE225B2045C172D6BD390BD855F086E3E9D525B46BFE24511431532");
+    assert(toHexString(sha3_256Of("")) ==
+        "A7FFC6F8BF1ED76651C14756A061D662F580FF4DE43B49FA82D80A4B80F8434A");
+
+    assert(toHexString(sha3_384Of("")) ==
+        "0C63A75B845E4F7D01107D852E4C2485C51A50AAAA94FC61995E71BBEE983A2AC37138"~
+        "31264ADB47FB6BD1E058D5F004");
+
+    assert(toHexString(sha3_512Of("")) ==
+        "A69F73CCA23A9AC5C8B567DC185A756E97C982164FE25859E0D1DCC1475C80A615B212"~
+        "3AF1F5F94C11E3E9402C3AC558F500199D95B6D3E301758586281DCD26");
 }
 
 ///
 @safe unittest
 {
-    //Using the basic API
+    assert(toHexString(sha3_224Of("abc")) ==
+        "E642824C3F8CF24AD09234EE7D3C766FC9A3A5168D0C94AD73B46FDF");
+
+    assert(toHexString(sha3_256Of("abc")) ==
+        "3A985DA74FE225B2045C172D6BD390BD855F086E3E9D525B46BFE24511431532");
+
+    assert(toHexString(sha3_384Of("abc")) ==
+        "EC01498288516FC926459F58E2C6AD8DF9B473CB0FC08C2596DA7CF0E49BE4B298D88C"~
+        "EA927AC7F539F1EDF228376D25");
+
+    assert(toHexString(sha3_512Of("abc")) ==
+        "B751850B1A57168A5693CD924B6B096E08F621827444F70D884F5D0240D2712E10E116"~
+        "E9192AF3C91A7EC57647E3934057340B4CF408D5A56592F8274EEC53F0");
+}
+
+///
+@safe unittest
+{
     SHA3_224 hash;
     hash.start();
     ubyte[1024] data;
-    //Initialize data here...
     hash.put(data);
     ubyte[28] result = hash.finish();
 }
@@ -313,17 +334,18 @@ private:
 ///
 @safe unittest
 {
-    //Let's use the template features:
-    //Note: When passing a SHA3 to a function, it must be passed by reference!
+    // Let's use the template features:
+    // NOTE: When passing a SHA3 to a function, it must be passed by reference!
     void doSomething(T)(ref T hash)
-    if (isDigest!T)
-    {
-      hash.put(cast(ubyte) 0);
-    }
+        if (isDigest!T)
+        {
+            hash.put(cast(ubyte) 0);
+        }
     SHA3_224 sha;
     sha.start();
     doSomething(sha);
-    assert(toHexString(sha.finish()) == "BDD5167212D2DC69665F5A8875AB87F23D5CE7849132F56371A19096");
+    assert(toHexString(sha.finish()) ==
+        "BDD5167212D2DC69665F5A8875AB87F23D5CE7849132F56371A19096");
 }
 
 public alias SHA3_224 = KECCAK!(224, false); /// Alias for SHA3-224
