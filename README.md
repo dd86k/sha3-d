@@ -20,6 +20,8 @@ performance that OpenSSL offers. _A much faster alternative to keccack-tiny!_
 
 Compatible and tested with DMD, GDC, and LDC.
 
+I accept Pull Requests!
+
 # License
 
 Published under the Boost License 1.0.

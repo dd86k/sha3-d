@@ -1,6 +1,7 @@
 /// Computes SHA-3 hashes of arbitary data.
 /// Reference: NIST FIPS PUB 202
-/// License: BSL-1.0
+/// License: $(LINK2 www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
+/// Authors: $(LINK2 github.com/dd86k, dd86k)
 module sha3d.sha3;
 
 private import std.digest;
