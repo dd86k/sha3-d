@@ -203,7 +203,6 @@ static void CHI(ref ulong[5] bc, ref ulong[25] st64, size_t j) @nogc
     st64[j + 4] ^= (~bc[0]) & bc[1];
 }
 
-pragma(inline, true)
 static void ROUND(ref ulong[5] bc, ref ulong[25] st64, size_t r) @nogc
 {
     ulong t = void;
