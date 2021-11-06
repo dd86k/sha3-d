@@ -2,7 +2,7 @@
 /// Reference: NIST FIPS PUB 202
 /// License: $(LINK2 www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 /// Authors: $(LINK2 github.com/dd86k, dd86k)
-module sha3d.sha3;
+module sha3d;
 
 private import std.digest;
 private import core.bitop : rol, bswap;
@@ -553,14 +553,14 @@ auto shake256Of(T...)(T data)
 /// An OOP API SHA-3 implementation. See `std.digest` for differences between
 /// the templates and the OOP API. This is similar to
 /// $(D $(REF WrapperDigest, std,digest)!SHA1Digest).
-alias SHA3_224Digest = WrapperDigest!SHA3_224;
+public alias SHA3_224Digest = WrapperDigest!SHA3_224;
 /// Ditto
-alias SHA3_256Digest = WrapperDigest!SHA3_256;
+public alias SHA3_256Digest = WrapperDigest!SHA3_256;
 /// Ditto
-alias SHA3_384Digest = WrapperDigest!SHA3_384;
+public alias SHA3_384Digest = WrapperDigest!SHA3_384;
 /// Ditto
-alias SHA3_512Digest = WrapperDigest!SHA3_512;
+public alias SHA3_512Digest = WrapperDigest!SHA3_512;
 /// Ditto
-alias SHAKE128Digest = WrapperDigest!SHAKE128;
+public alias SHAKE128Digest = WrapperDigest!SHAKE128;
 /// Ditto
-alias SHAKE256Digest = WrapperDigest!SHAKE256;
+public alias SHAKE256Digest = WrapperDigest!SHAKE256;

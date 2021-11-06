@@ -22,6 +22,14 @@ Compatible and tested with DMD, GDC, and LDC.
 
 I accept Pull Requests!
 
+# Usage
+
+To include it in your project, simply import the package:
+
+```d
+import sha3d;
+```
+
 # License
 
 Published under the Boost License 1.0.
