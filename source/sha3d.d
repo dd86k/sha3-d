@@ -41,9 +41,9 @@ public struct KECCAK(uint digestSize, bool shake = false)
         static assert(digestSize == 224 || digestSize == 256 ||
             digestSize == 384 || digestSize == 512,
             "digest size must be 224, 256, 384, or 512 bits for SHA-3");
-
+    
     @safe @nogc pure nothrow:
-
+    
     enum blockSize = 1600 - digestSize * 2; /// Sponge rate in bits
     
     private enum
@@ -52,19 +52,20 @@ public struct KECCAK(uint digestSize, bool shake = false)
         delim = shake ? 0x1f : 0x06, /// Delimiter when finishing
         rate = blockSize / 8 /// Sponge rate in bytes
     }
-
+    
     union
     {
         private ubyte[200] st;  // state (8bit)
         private ulong[25] st64; // state (64bit)
         private size_t[200 / size_t.sizeof] stz; // state (size_t)
     }
-
     static assert(st64.sizeof == st.sizeof);
     static assert(stz.sizeof == st.sizeof);
-
+    
+    private ulong[5] bc; // transformation data
+    private ulong t; // transformation temporary
     private size_t pt; // left-over pointer
-
+    
     /// Initiates the structure. Begins the SHA-3/SHAKE operation.
     /// This is better used when restarting the operation (e.g.,
     /// for a file).
@@ -72,7 +73,7 @@ public struct KECCAK(uint digestSize, bool shake = false)
     {
         this = typeof(this).init;
     }
-
+    
     /// Feed the algorithm with data
     /// Also implements the $(REF isOutputRange, std,range,primitives)
     /// interface for `ubyte` and `const(ubyte)[]`.
@@ -111,7 +112,7 @@ public struct KECCAK(uint digestSize, bool shake = false)
         
         pt = j;
     }
-
+    
     /// Returns the finished hash. This also clears part of the state,
     /// leaving just the final digest.
     ubyte[digestSizeBytes] finish()
@@ -119,167 +120,163 @@ public struct KECCAK(uint digestSize, bool shake = false)
         st[pt] ^= delim;
         st[rate - 1] ^= 0x80;
         transform;
-
-        st[digestSizeBytes .. $] = 0; // Zero possible sensitive data
+        
+        // Clear potentially sensitive data
+        st[digestSizeBytes .. $] = 0;
+        bc[0..4] = 0;
+        t = 0;
         return st[0 .. digestSizeBytes];
     }
-
-private:
+    
+    private:
+    
     void transform()
     {
-        ulong[5] bc = void;
-
         version (BigEndian) swap;
 
-        ROUND(bc, st64,  0);
-        ROUND(bc, st64,  1);
-        ROUND(bc, st64,  2);
-        ROUND(bc, st64,  3);
-        ROUND(bc, st64,  4);
-        ROUND(bc, st64,  5);
-        ROUND(bc, st64,  6);
-        ROUND(bc, st64,  7);
-        ROUND(bc, st64,  8);
-        ROUND(bc, st64,  9);
-        ROUND(bc, st64, 10);
-        ROUND(bc, st64, 11);
-        ROUND(bc, st64, 12);
-        ROUND(bc, st64, 13);
-        ROUND(bc, st64, 14);
-        ROUND(bc, st64, 15);
-        ROUND(bc, st64, 16);
-        ROUND(bc, st64, 17);
-        ROUND(bc, st64, 18);
-        ROUND(bc, st64, 19);
-        ROUND(bc, st64, 20);
-        ROUND(bc, st64, 21);
-        ROUND(bc, st64, 22);
-        ROUND(bc, st64, 23);
+        ROUND( 0);
+        ROUND( 1);
+        ROUND( 2);
+        ROUND( 3);
+        ROUND( 4);
+        ROUND( 5);
+        ROUND( 6);
+        ROUND( 7);
+        ROUND( 8);
+        ROUND( 9);
+        ROUND(10);
+        ROUND(11);
+        ROUND(12);
+        ROUND(13);
+        ROUND(14);
+        ROUND(15);
+        ROUND(16);
+        ROUND(17);
+        ROUND(18);
+        ROUND(19);
+        ROUND(20);
+        ROUND(21);
+        ROUND(22);
+        ROUND(23);
 
         version (BigEndian) swap;
     }
-}
+    
+    void THETA1(size_t i)
+    {
+        bc[i] = st64[i] ^ st64[i + 5] ^ st64[i + 10] ^ st64[i + 15] ^ st64[i + 20];
+    }
+    
+    void THETA2(size_t i)
+    {
+        t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
+        st64[     i] ^= t;
+        st64[ 5 + i] ^= t;
+        st64[10 + i] ^= t;
+        st64[15 + i] ^= t;
+        st64[20 + i] ^= t;
+    }
+    
+    void RHO(size_t i)
+    {
+        int j = K_PI[i];
+        bc[0] = st64[j];
+        st64[j] = rol(t, K_ROTC[i]);
+        t = bc[0];
+    }
+    
+    void CHI(size_t j)
+    {
+        bc[0] = st64[j];
+        bc[1] = st64[j + 1];
+        bc[2] = st64[j + 2];
+        bc[3] = st64[j + 3];
+        bc[4] = st64[j + 4];
 
-private:
-@safe:
-pure:
-nothrow:
-
-static void THETA1(ref ulong[5] bc, ref ulong[25] st64, size_t i) @nogc
-{
-    bc[i] = st64[i] ^ st64[i + 5] ^ st64[i + 10] ^ st64[i + 15] ^ st64[i + 20];
-}
-
-static void THETA2(ref ulong[5] bc, ref ulong[25] st64, ref ulong t, size_t i) @nogc
-{
-    t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
-    st64[     i] ^= t;
-    st64[ 5 + i] ^= t;
-    st64[10 + i] ^= t;
-    st64[15 + i] ^= t;
-    st64[20 + i] ^= t;
-}
-
-static void RHO(ref ulong[5] bc, ref ulong[25] st64, ref ulong t, size_t i) @nogc
-{
-    int j = K_PI[i];
-    bc[0] = st64[j];
-    st64[j] = rol(t, K_ROTC[i]);
-    t = bc[0];
-}
-
-static void CHI(ref ulong[5] bc, ref ulong[25] st64, size_t j) @nogc
-{
-    bc[0] = st64[j];
-    bc[1] = st64[j + 1];
-    bc[2] = st64[j + 2];
-    bc[3] = st64[j + 3];
-    bc[4] = st64[j + 4];
-
-    st64[j]     ^= (~bc[1]) & bc[2];
-    st64[j + 1] ^= (~bc[2]) & bc[3];
-    st64[j + 2] ^= (~bc[3]) & bc[4];
-    st64[j + 3] ^= (~bc[4]) & bc[0];
-    st64[j + 4] ^= (~bc[0]) & bc[1];
-}
-
-static void ROUND(ref ulong[5] bc, ref ulong[25] st64, size_t r) @nogc
-{
-    ulong t = void;
-    // Theta
-    THETA1(bc, st64, 0);
-    THETA1(bc, st64, 1);
-    THETA1(bc, st64, 2);
-    THETA1(bc, st64, 3);
-    THETA1(bc, st64, 4);
-    THETA2(bc, st64, t, 0);
-    THETA2(bc, st64, t, 1);
-    THETA2(bc, st64, t, 2);
-    THETA2(bc, st64, t, 3);
-    THETA2(bc, st64, t, 4);
-    t = st64[1];
-    // Rho
-    RHO(bc, st64, t, 0);
-    RHO(bc, st64, t, 1);
-    RHO(bc, st64, t, 2);
-    RHO(bc, st64, t, 3);
-    RHO(bc, st64, t, 4);
-    RHO(bc, st64, t, 5);
-    RHO(bc, st64, t, 6);
-    RHO(bc, st64, t, 7);
-    RHO(bc, st64, t, 8);
-    RHO(bc, st64, t, 9);
-    RHO(bc, st64, t, 10);
-    RHO(bc, st64, t, 11);
-    RHO(bc, st64, t, 12);
-    RHO(bc, st64, t, 13);
-    RHO(bc, st64, t, 14);
-    RHO(bc, st64, t, 15);
-    RHO(bc, st64, t, 16);
-    RHO(bc, st64, t, 17);
-    RHO(bc, st64, t, 18);
-    RHO(bc, st64, t, 19);
-    RHO(bc, st64, t, 20);
-    RHO(bc, st64, t, 21);
-    RHO(bc, st64, t, 22);
-    RHO(bc, st64, t, 23);
-    // Chi
-    CHI(bc, st64, 0);
-    CHI(bc, st64, 5);
-    CHI(bc, st64, 10);
-    CHI(bc, st64, 15);
-    CHI(bc, st64, 20);
-    // Iota
-    st64[0] ^= K_RC[r];
-}
-
-version (BigEndian)
-void swap() @nogc
-{
-    st64[ 0] = bswap(st64[ 0]);
-    st64[ 1] = bswap(st64[ 1]);
-    st64[ 2] = bswap(st64[ 2]);
-    st64[ 3] = bswap(st64[ 3]);
-    st64[ 4] = bswap(st64[ 4]);
-    st64[ 5] = bswap(st64[ 5]);
-    st64[ 6] = bswap(st64[ 6]);
-    st64[ 7] = bswap(st64[ 7]);
-    st64[ 8] = bswap(st64[ 8]);
-    st64[ 9] = bswap(st64[ 9]);
-    st64[10] = bswap(st64[10]);
-    st64[11] = bswap(st64[11]);
-    st64[12] = bswap(st64[12]);
-    st64[13] = bswap(st64[13]);
-    st64[14] = bswap(st64[14]);
-    st64[15] = bswap(st64[15]);
-    st64[16] = bswap(st64[16]);
-    st64[17] = bswap(st64[17]);
-    st64[18] = bswap(st64[18]);
-    st64[19] = bswap(st64[19]);
-    st64[20] = bswap(st64[20]);
-    st64[21] = bswap(st64[21]);
-    st64[22] = bswap(st64[22]);
-    st64[23] = bswap(st64[23]);
+        st64[j]     ^= (~bc[1]) & bc[2];
+        st64[j + 1] ^= (~bc[2]) & bc[3];
+        st64[j + 2] ^= (~bc[3]) & bc[4];
+        st64[j + 3] ^= (~bc[4]) & bc[0];
+        st64[j + 4] ^= (~bc[0]) & bc[1];
+    }
+    
+    void ROUND(size_t r)
+    {
+        // Theta
+        THETA1(0);
+        THETA1(1);
+        THETA1(2);
+        THETA1(3);
+        THETA1(4);
+        THETA2(0);
+        THETA2(1);
+        THETA2(2);
+        THETA2(3);
+        THETA2(4);
+        t = st64[1];
+        // Rho
+        RHO(0);
+        RHO(1);
+        RHO(2);
+        RHO(3);
+        RHO(4);
+        RHO(5);
+        RHO(6);
+        RHO(7);
+        RHO(8);
+        RHO(9);
+        RHO(10);
+        RHO(11);
+        RHO(12);
+        RHO(13);
+        RHO(14);
+        RHO(15);
+        RHO(16);
+        RHO(17);
+        RHO(18);
+        RHO(19);
+        RHO(20);
+        RHO(21);
+        RHO(22);
+        RHO(23);
+        // Chi
+        CHI(0);
+        CHI(5);
+        CHI(10);
+        CHI(15);
+        CHI(20);
+        // Iota
+        st64[0] ^= K_RC[r];
+    }
+    
+    version (BigEndian)
+    void swap()
+    {
+        st64[ 0] = bswap(st64[ 0]);
+        st64[ 1] = bswap(st64[ 1]);
+        st64[ 2] = bswap(st64[ 2]);
+        st64[ 3] = bswap(st64[ 3]);
+        st64[ 4] = bswap(st64[ 4]);
+        st64[ 5] = bswap(st64[ 5]);
+        st64[ 6] = bswap(st64[ 6]);
+        st64[ 7] = bswap(st64[ 7]);
+        st64[ 8] = bswap(st64[ 8]);
+        st64[ 9] = bswap(st64[ 9]);
+        st64[10] = bswap(st64[10]);
+        st64[11] = bswap(st64[11]);
+        st64[12] = bswap(st64[12]);
+        st64[13] = bswap(st64[13]);
+        st64[14] = bswap(st64[14]);
+        st64[15] = bswap(st64[15]);
+        st64[16] = bswap(st64[16]);
+        st64[17] = bswap(st64[17]);
+        st64[18] = bswap(st64[18]);
+        st64[19] = bswap(st64[19]);
+        st64[20] = bswap(st64[20]);
+        st64[21] = bswap(st64[21]);
+        st64[22] = bswap(st64[22]);
+        st64[23] = bswap(st64[23]);
+    }
 }
 
 /// Test against empty datasets
