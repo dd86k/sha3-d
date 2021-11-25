@@ -29,9 +29,10 @@ private immutable int[24] K_PI = [
 /// Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
 /// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128,
 /// and SHAKE256 aliases.
+///
 /// Params:
-///   digestSize = Digest size in bits
-///   shake = Set to true for SHAKE; Otherwise false for SHA-3
+///   digestSize = Digest size in bits.
+///   shake = Set to true for SHAKE; Otherwise false for SHA-3. Defaults to false.
 public struct KECCAK(uint digestSize, bool shake = false)
 {
     static if (shake)
@@ -295,6 +296,11 @@ public struct KECCAK(uint digestSize, bool shake = false)
     assert(toHexString(sha3_512Of("")) ==
         "A69F73CCA23A9AC5C8B567DC185A756E97C982164FE25859E0D1DCC1475C80A615B212"~
         "3AF1F5F94C11E3E9402C3AC558F500199D95B6D3E301758586281DCD26");
+    
+    assert(toHexString(shake128Of("")) == "7F9C2BA4E88F827D616045507605853E");
+    
+    assert(toHexString(shake256Of("")) ==
+        "46B9DD2B0BA88D13233B3FEB743EEB243FCD52EA62B81B82B50C27646ED5762F");
 }
 
 /// Of wrappers + toHexString
@@ -366,35 +372,17 @@ public alias SHAKE256 = KECCAK!(256, true);
 }
 
 /// Convience alias for $(REF digest, std,digest) using the SHA-3 implementation.
-auto sha3_224Of(T...)(T data)
-{
-    return digest!(SHA3_224, T)(data);
-}
+auto sha3_224Of(T...)(T data) { return digest!(SHA3_224, T)(data); }
 /// Ditto
-auto sha3_256Of(T...)(T data)
-{
-    return digest!(SHA3_256, T)(data);
-}
+auto sha3_256Of(T...)(T data) { return digest!(SHA3_256, T)(data); }
 /// Ditto
-auto sha3_384Of(T...)(T data)
-{
-    return digest!(SHA3_384, T)(data);
-}
+auto sha3_384Of(T...)(T data) { return digest!(SHA3_384, T)(data); }
 /// Ditto
-auto sha3_512Of(T...)(T data)
-{
-    return digest!(SHA3_512, T)(data);
-}
+auto sha3_512Of(T...)(T data) { return digest!(SHA3_512, T)(data); }
 /// Ditto
-auto shake128Of(T...)(T data)
-{
-    return digest!(SHAKE128, T)(data);
-}
+auto shake128Of(T...)(T data) { return digest!(SHAKE128, T)(data); }
 /// Ditto
-auto shake256Of(T...)(T data)
-{
-    return digest!(SHAKE256, T)(data);
-}
+auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
 
 /// digest! wrappers
 @safe unittest
@@ -467,7 +455,7 @@ auto shake256Of(T...)(T data)
         cast(ubyte[]) hexString!"46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
 }
 
-/// Of wrappers
+/// "Of" wrappers like sha3_224Of
 @system unittest
 {
     import std.conv : hexString;
@@ -560,3 +548,34 @@ public alias SHA3_512Digest = WrapperDigest!SHA3_512;
 public alias SHAKE128Digest = WrapperDigest!SHAKE128;
 /// Ditto
 public alias SHAKE256Digest = WrapperDigest!SHAKE256;
+
+/// Test OOP wrappers
+@system unittest
+{
+    import std.conv : hexString;
+    
+    SHA3_224Digest sha3_224 = new SHA3_224Digest();
+    assert(sha3_224.finish() == cast(ubyte[])
+        hexString!"6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7");
+    
+    SHA3_256Digest sha3_256 = new SHA3_256Digest();
+    assert(sha3_256.finish() == cast(ubyte[])
+        hexString!"a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
+    
+    SHA3_384Digest sha3_384 = new SHA3_384Digest();
+    assert(sha3_384.finish() == cast(ubyte[])
+        hexString!"0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004");
+    
+    SHA3_512Digest sha3_512 = new SHA3_512Digest();
+    assert(sha3_512.finish() == cast(ubyte[])
+        hexString!("a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615"~
+        "b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"));
+    
+    SHAKE128Digest shake128 = new SHAKE128Digest();
+    assert(shake128.finish() == cast(ubyte[])
+        hexString!("7f9c2ba4e88f827d616045507605853e"));
+    
+    SHAKE256Digest shake256 = new SHAKE256Digest();
+    assert(shake256.finish() == cast(ubyte[])
+        hexString!("46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"));
+}
