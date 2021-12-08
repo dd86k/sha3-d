@@ -22,7 +22,7 @@ Compatible and tested with DMD, GDC, and LDC.
 
 Pull Requests accepted.
 
-**If you would like to disclose a vulnerability, please consult [SECURITY.md](../.github/SECURITY.md).**
+**If you would like to disclose a vulnerability, please consult [SECURITY.md](../master/.github/SECURITY.md).**
 
 # Usage
 
