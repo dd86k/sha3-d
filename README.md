@@ -4,9 +4,9 @@ SHA-3 library written entirely in D implementing Keccack-f[1600] and is fully
 compatible with the Phobos Digest API (std.digest).
 
 Introduced in 2015, SHA-3 is the latest member of the SHA family. SHA-3 is
-already used in production worlwide, including SQLite3 for both internal and
-download integrity operations. For more information about SHA-3, consult
-NIST FIPS PUB 202.
+already used in production-ready projects worlwide, including SQLite3 for both
+internal and download integrity operations. For more information about SHA-3,
+consult NIST FIPS PUB 202.
 
 This module implementes following hashing algorithms:
 - SHA-3-224
@@ -21,6 +21,8 @@ _A much faster alternative to keccack-tiny!_
 Compatible and tested with DMD, GDC, and LDC.
 
 Pull Requests accepted.
+
+**If you would like to disclose a vulnerability, please consult [SECURITY.md](../.github/SECURITY.md).**
 
 # Usage
 
