@@ -46,9 +46,8 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     {
         static assert(digestSize == 128 || digestSize == 256,
             "SHAKE digest size must be 128 or 256 bits");
-        static assert(shake % 8 == 0, "SHAKE digest size must be dividable by 8");
-        static assert(shake != 0, "SHAKE digest size must be non-zero");
-        static assert(shake <= 1600, "SHAKE digest size must be less or equal to 1600");
+        static assert(shake > 0 && shake <= 1600,
+            "SHAKE digest size must be between 1 to 1600 bits");
         private enum digestSizeBytes = shake / 8; /// Digest size in bytes
     }
     else // SHA-3
