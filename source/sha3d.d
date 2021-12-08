@@ -28,41 +28,54 @@ private immutable int[24] K_PI = [
 ///
 /// Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
 /// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128,
-/// and SHAKE256 aliases.
+/// and SHAKE256 template aliases.
+///
+/// To make a XOF (like SHAKE-128/256):
+/// ---
+/// alias SHAKE128_256 = KECCAK!(128, 256);
+/// alias SHAKE128_256Digest = WrapperDigest!SHAKE128_256;
+/// auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
+/// ---
 ///
 /// Params:
 ///   digestSize = Digest size in bits.
-///   shake = Set to true for SHAKE; Otherwise false for SHA-3. Defaults to false.
-public struct KECCAK(uint digestSize, bool shake = false)
+///   shake = Sets SHAKE XOF digest output. For example, KECCAK!(128, 256) results in SHAKE-128/256. Defaults to 0 for SHA-3.
+public struct KECCAK(uint digestSize, uint shake = 0)
 {
     static if (shake)
     {
         static assert(digestSize == 128 || digestSize == 256,
-            "digest size must be 128 or 256 bits for SHAKE");
+            "SHAKE digest size must be 128 or 256 bits");
+        static assert(shake % 8 == 0, "SHAKE digest size must be dividable by 8");
+        static assert(shake != 0, "SHAKE digest size must be non-zero");
+        static assert(shake <= 1600, "SHAKE digest size must be less or equal to 1600");
+        private enum digestSizeBytes = shake / 8; /// Digest size in bytes
     }
-    else
+    else // SHA-3
     {
         static assert(digestSize == 224 || digestSize == 256 ||
             digestSize == 384 || digestSize == 512,
-            "digest size must be 224, 256, 384, or 512 bits for SHA-3");
+            "SHA-3 digest size must be 224, 256, 384, or 512 bits");
+        private enum digestSizeBytes = digestSize / 8; /// Digest size in bytes
     }
     
     @safe @nogc pure nothrow:
     
-    enum blockSize = 1600 - digestSize * 2; /// Sponge rate in bits
-    
-    private enum
-    {
-        digestSizeBytes = digestSize / 8, /// Digest size in bytes
-        delim = shake ? 0x1f : 0x06, /// Delimiter when finishing
-        rate = blockSize / 8 /// Sponge rate in bytes
-    }
+    //  ...0: Reserved
+    //    01: SHA-3
+    // ...11: RawSHAKE
+    //  1111: SHAKE
+    private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
+    private enum rate = (1600 - digestSize * 2) / 8; /// Sponge rate in bytes
+    private enum stateSize = 200;
+    private enum stateSt64Size = stateSize / 8;
+    private enum stateStzSize = stateSize / size_t.sizeof;
     
     union
     {
-        private ubyte[200] st;  // state (8bit)
-        private ulong[25] st64; // state (64bit)
-        private size_t[200 / size_t.sizeof] stz; // state (size_t)
+        private ubyte[stateSize] st;  // state (8bit)
+        private ulong[stateSt64Size] st64; // state (64bit)
+        private size_t[stateStzSize] stz; // state (size_t)
     }
     static assert(st64.sizeof == st.sizeof);
     static assert(stz.sizeof == st.sizeof);
@@ -126,7 +139,9 @@ public struct KECCAK(uint digestSize, bool shake = false)
         transform;
         
         // Clear potentially sensitive data
-        st[digestSizeBytes .. $] = 0;
+        // State sanitized only if digestSize is less than 1600 bits (200 bytes)
+        static if (digestSizeBytes < 200)
+            st[digestSizeBytes .. $] = 0;
         bc[0..4] = 0;
         t = 0;
         return st[0 .. digestSizeBytes];
@@ -338,7 +353,7 @@ private:
 @safe unittest
 {
     // Let's use the template features:
-    // NOTE: When passing a SHA3 to a function, it must be passed by reference!
+    // NOTE: When passing a digest to a function, it must be passed by reference!
     void doSomething(T)(ref T hash)
         if (isDigest!T)
         {
@@ -352,17 +367,17 @@ private:
 }
 
 /// Template alias for SHA-3-224.
-public alias SHA3_224 = KECCAK!(224, false);
+public alias SHA3_224 = KECCAK!(224);
 /// Template alias for SHA-3-256.
-public alias SHA3_256 = KECCAK!(256, false);
+public alias SHA3_256 = KECCAK!(256);
 /// Template alias for SHA-3-384.
-public alias SHA3_384 = KECCAK!(384, false);
+public alias SHA3_384 = KECCAK!(384);
 /// Template alias for SHA-3-512.
-public alias SHA3_512 = KECCAK!(512, false);
+public alias SHA3_512 = KECCAK!(512);
 /// Template alias for SHAKE-128.
-public alias SHAKE128 = KECCAK!(128, true);
+public alias SHAKE128 = KECCAK!(128, 128);
 /// Template alias for SHAKE-256.
-public alias SHAKE256 = KECCAK!(256, true);
+public alias SHAKE256 = KECCAK!(256, 256);
 
 @safe unittest
 {
@@ -565,7 +580,8 @@ public alias SHAKE256Digest = WrapperDigest!SHAKE256;
     
     SHA3_384Digest sha3_384 = new SHA3_384Digest();
     assert(sha3_384.finish() == cast(ubyte[])
-        hexString!"0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004");
+        hexString!("0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac371"~
+        "3831264adb47fb6bd1e058d5f004"));
     
     SHA3_512Digest sha3_512 = new SHA3_512Digest();
     assert(sha3_512.finish() == cast(ubyte[])
@@ -579,4 +595,42 @@ public alias SHAKE256Digest = WrapperDigest!SHAKE256;
     SHAKE256Digest shake256 = new SHAKE256Digest();
     assert(shake256.finish() == cast(ubyte[])
         hexString!("46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"));
+}
+
+/// Testing out various SHAKE XOFs.
+@system unittest
+{
+    import std.conv : hexString;
+    
+    // SHAKE128("", 256)
+    auto shake128_256empty =
+        hexString!("7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
+    // SHAKE256("", 512)
+    auto shake256_512empty =
+        hexString!("46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"~
+        "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be");
+    
+    // SHAKE-128/256
+    alias SHAKE128_256 = KECCAK!(128, 256);
+    alias SHAKE128_256Digest = WrapperDigest!SHAKE128_256;
+    auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
+    
+    // Template API
+    assert(shake128_256Of("") == shake128_256empty);
+    
+    // OOP API
+    Digest shake128_256 = new SHAKE128_256Digest();
+    assert(shake128_256.finish() == shake128_256empty);
+    
+    // SHAKE-256/512
+    alias SHAKE256_512 = KECCAK!(256, 512);
+    alias SHAKE256_512Digest = WrapperDigest!SHAKE256_512;
+    auto shake256_512Of(T...)(T data) { return digest!(SHAKE256_512, T)(data); }
+    
+    // Template API
+    assert(shake256_512Of("") == shake256_512empty);
+    
+    // OOP API
+    Digest shake256_512 = new SHAKE256_512Digest();
+    assert(shake256_512.finish() == shake256_512empty);
 }

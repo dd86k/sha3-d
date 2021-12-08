@@ -13,11 +13,10 @@ This module implementes following hashing algorithms:
 - SHA-3-256
 - SHA-3-384
 - SHA-3-512
-- SHAKE-128
-- SHAKE-256
+- SHAKE-128 plus XOFs (e.g., SHAKE-128/256)
+- SHAKE-256 plus XOFs (e.g., SHAKE-256/512)
 
-When compiled with LDC (`-b release-nobounds`), this package matches the
-performance that OpenSSL offers. _A much faster alternative to keccack-tiny!_
+_A much faster alternative to keccack-tiny!_
 
 Compatible and tested with DMD, GDC, and LDC.
 
