@@ -60,12 +60,14 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     
     @safe @nogc pure nothrow:
     
+    enum blockSize = (1600 - digestSize * 2);	/// Digest size in bits
+    
     //  ...0: Reserved
     //    01: SHA-3
     // ...11: RawSHAKE
     //  1111: SHAKE
     private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
-    private enum rate = (1600 - digestSize * 2) / 8; /// Sponge rate in bytes
+    private enum rate = blockSize / 8; /// Sponge rate in bytes
     private enum stateSize = 200;
     private enum stateSt64Size = stateSize / 8;
     private enum stateStzSize = stateSize / size_t.sizeof;
@@ -296,6 +298,8 @@ private:
         st64[23] = bswap(st64[23]);
     }
 }
+
+// Unittest based on https://www.di-mgt.com.au/sha_testvectors.html
 
 /// Test against empty datasets
 @safe unittest
@@ -594,6 +598,21 @@ public alias SHAKE256Digest = WrapperDigest!SHAKE256;
     SHAKE256Digest shake256 = new SHAKE256Digest();
     assert(shake256.finish() == cast(ubyte[])
         hexString!("46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"));
+}
+
+/// Testing with HMAC
+@system unittest
+{
+    import std.ascii : LetterCase;
+    import std.string : representation;
+    import std.digest.hmac : hmac;
+
+    auto secret = "secret".representation;
+    assert("The quick brown fox jumps over the lazy dog"
+        .representation
+        .hmac!SHA3_256(secret)
+        .toHexString!(LetterCase.lower) ==
+	"93379fab68fae6d0fde0c816ea8a49fbd3c80f136c6af08bc61df5268d01b4d8");
 }
 
 /// Testing out various SHAKE XOFs.
