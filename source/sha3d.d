@@ -60,7 +60,7 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         private enum digestSizeBytes = digestSize / 8; /// Digest size in bytes
     }
     
-    @safe @nogc pure nothrow:
+    @safe: @nogc: nothrow: pure:
     
     enum blockSize = (1600 - digestSize * 2);	/// Digest size in bits
     
