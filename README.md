@@ -16,6 +16,8 @@ This module implementes following hashing algorithms:
 - SHAKE-128 plus XOFs (e.g., SHAKE-128/256)
 - SHAKE-256 plus XOFs (e.g., SHAKE-256/512)
 
+All are compatible with the HMAC structure template (std.digest.hmac).
+
 _A much faster alternative to keccack-tiny!_
 
 Compatible and tested with DMD, GDC, and LDC.
