@@ -384,6 +384,7 @@ public alias SHAKE128 = KECCAK!(128, 128);
 /// Template alias for SHAKE-256.
 public alias SHAKE256 = KECCAK!(256, 256);
 
+/// Yep, they're conform to the Digest API.
 @safe unittest
 {
     assert(isDigest!SHA3_224);
@@ -392,6 +393,17 @@ public alias SHAKE256 = KECCAK!(256, 256);
     assert(isDigest!SHA3_512);
     assert(isDigest!SHAKE128);
     assert(isDigest!SHAKE256);
+}
+
+/// Yep, they all have the blockSize field.
+@safe unittest
+{
+    assert(hasBlockSize!SHA3_224);
+    assert(hasBlockSize!SHA3_256);
+    assert(hasBlockSize!SHA3_384);
+    assert(hasBlockSize!SHA3_512);
+    assert(hasBlockSize!SHAKE128);
+    assert(hasBlockSize!SHAKE256);
 }
 
 /// Convience alias for $(REF digest, std,digest) using the SHA-3 implementation.
