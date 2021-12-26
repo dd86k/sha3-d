@@ -77,9 +77,9 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     
     union
     {
-        private ubyte[stateSize] st;  // state (8bit)
-        private ulong[stateSt64Size] st64; // state (64bit)
         private size_t[stateStzSize] stz; // state (size_t)
+        private ulong[stateSt64Size] st64; // state (64bit)
+        private ubyte[stateSize] st;  // state (8bit)
     }
     static assert(st64.sizeof == st.sizeof);
     static assert(stz.sizeof == st.sizeof);
