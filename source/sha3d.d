@@ -148,7 +148,7 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         // State sanitized only if digestSize is less than 1600 bits (200 bytes)
         static if (digestSizeBytes < 200)
             st[digestSizeBytes..$] = 0;
-        bc[0..4] = t = 0;
+        bc[] = t = 0;
         return st[0..digestSizeBytes];
     }
     
@@ -158,12 +158,23 @@ private:
     {
         version (BigEndian) swap;
 
-        ROUND( 0); ROUND( 1); ROUND( 2); ROUND( 3);
-        ROUND( 4); ROUND( 5); ROUND( 6); ROUND( 7);
-        ROUND( 8); ROUND( 9); ROUND(10); ROUND(11);
-        ROUND(12); ROUND(13); ROUND(14); ROUND(15);
-        ROUND(16); ROUND(17); ROUND(18); ROUND(19);
-        ROUND(20); ROUND(21); ROUND(22); ROUND(23);
+        for (size_t round; round < 24; ++round)
+        {
+            // Theta
+            THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
+            THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
+            t = st64[1];
+            // Rho
+            RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
+            RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
+            RHO(10); RHO(11); RHO(12); RHO(13); RHO(14);
+            RHO(15); RHO(16); RHO(17); RHO(18); RHO(19);
+            RHO(20); RHO(21); RHO(22); RHO(23);
+            // Chi
+            CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
+            // Iota
+            st64[0] ^= K_RC[round];
+        }
 
         version (BigEndian) swap;
     }
@@ -204,24 +215,6 @@ private:
         st64[j + 2] ^= (~bc[3]) & bc[4];
         st64[j + 3] ^= (~bc[4]) & bc[0];
         st64[j + 4] ^= (~bc[0]) & bc[1];
-    }
-    
-    void ROUND(size_t r)
-    {
-        // Theta
-        THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
-        THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
-        t = st64[1];
-        // Rho
-        RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
-        RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
-        RHO(10); RHO(11); RHO(12); RHO(13); RHO(14);
-        RHO(15); RHO(16); RHO(17); RHO(18); RHO(19);
-        RHO(20); RHO(21); RHO(22); RHO(23);
-        // Chi
-        CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
-        // Iota
-        st64[0] ^= K_RC[r];
     }
     
     version (BigEndian)
