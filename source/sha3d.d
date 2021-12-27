@@ -9,6 +9,7 @@ public enum SHA3D_VERSION_STRING = "1.2.1";
 private import std.digest;
 private import core.bitop : rol, bswap;
 
+// 24 rounds
 private immutable ulong[24] K_RC = [
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
     0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
@@ -17,11 +18,12 @@ private immutable ulong[24] K_RC = [
     0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
     0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
 ];
-private immutable int[24] K_ROTC = [
+private immutable int[24] K_RHO = [
      1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
     27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
 ];
-private immutable int[24] K_PI = [
+// PI indexes
+private immutable size_t[24] K_PI = [
     10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
     15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
 ];
@@ -30,7 +32,7 @@ private immutable int[24] K_PI = [
 ///
 /// Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
 /// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128,
-/// and SHAKE256 template aliases.
+/// and SHAKE256 template aliases respectively.
 ///
 /// To make a XOF (like SHAKE-128/256):
 /// ---
@@ -72,14 +74,14 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
     private enum rate = blockSize / 8; /// Sponge rate in bytes
     private enum stateSize = 200;
-    private enum stateSt64Size = stateSize / 8;
-    private enum stateStzSize = stateSize / size_t.sizeof;
+    private enum state64Size = stateSize / ulong.sizeof;
+    private enum stateSzSize = stateSize / size_t.sizeof;
     
     union
     {
-        private size_t[stateStzSize] stz; // state (size_t)
-        private ulong[stateSt64Size] st64; // state (64bit)
-        private ubyte[stateSize] st;  // state (8bit)
+        private size_t[stateSzSize] stz;  // state (size_t)
+        private ulong[state64Size] st64; // state (ulong)
+        private ubyte[stateSize] st;       // state (ubyte)
     }
     static assert(st64.sizeof == st.sizeof);
     static assert(stz.sizeof == st.sizeof);
@@ -145,10 +147,9 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         // Clear potentially sensitive data
         // State sanitized only if digestSize is less than 1600 bits (200 bytes)
         static if (digestSizeBytes < 200)
-            st[digestSizeBytes .. $] = 0;
-        bc[0..4] = 0;
-        t = 0;
-        return st[0 .. digestSizeBytes];
+            st[digestSizeBytes..$] = 0;
+        bc[0..4] = t = 0;
+        return st[0..digestSizeBytes];
     }
     
 private:
@@ -157,30 +158,12 @@ private:
     {
         version (BigEndian) swap;
 
-        ROUND( 0);
-        ROUND( 1);
-        ROUND( 2);
-        ROUND( 3);
-        ROUND( 4);
-        ROUND( 5);
-        ROUND( 6);
-        ROUND( 7);
-        ROUND( 8);
-        ROUND( 9);
-        ROUND(10);
-        ROUND(11);
-        ROUND(12);
-        ROUND(13);
-        ROUND(14);
-        ROUND(15);
-        ROUND(16);
-        ROUND(17);
-        ROUND(18);
-        ROUND(19);
-        ROUND(20);
-        ROUND(21);
-        ROUND(22);
-        ROUND(23);
+        ROUND( 0); ROUND( 1); ROUND( 2); ROUND( 3);
+        ROUND( 4); ROUND( 5); ROUND( 6); ROUND( 7);
+        ROUND( 8); ROUND( 9); ROUND(10); ROUND(11);
+        ROUND(12); ROUND(13); ROUND(14); ROUND(15);
+        ROUND(16); ROUND(17); ROUND(18); ROUND(19);
+        ROUND(20); ROUND(21); ROUND(22); ROUND(23);
 
         version (BigEndian) swap;
     }
@@ -202,9 +185,9 @@ private:
     
     void RHO(size_t i)
     {
-        int j = K_PI[i];
+        size_t j = K_PI[i];
         bc[0] = st64[j];
-        st64[j] = rol(t, K_ROTC[i]);
+        st64[j] = rol(t, K_RHO[i]);
         t = bc[0];
     }
     
@@ -226,48 +209,17 @@ private:
     void ROUND(size_t r)
     {
         // Theta
-        THETA1(0);
-        THETA1(1);
-        THETA1(2);
-        THETA1(3);
-        THETA1(4);
-        THETA2(0);
-        THETA2(1);
-        THETA2(2);
-        THETA2(3);
-        THETA2(4);
+        THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
+        THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
         t = st64[1];
         // Rho
-        RHO(0);
-        RHO(1);
-        RHO(2);
-        RHO(3);
-        RHO(4);
-        RHO(5);
-        RHO(6);
-        RHO(7);
-        RHO(8);
-        RHO(9);
-        RHO(10);
-        RHO(11);
-        RHO(12);
-        RHO(13);
-        RHO(14);
-        RHO(15);
-        RHO(16);
-        RHO(17);
-        RHO(18);
-        RHO(19);
-        RHO(20);
-        RHO(21);
-        RHO(22);
-        RHO(23);
+        RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
+        RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
+        RHO(10); RHO(11); RHO(12); RHO(13); RHO(14);
+        RHO(15); RHO(16); RHO(17); RHO(18); RHO(19);
+        RHO(20); RHO(21); RHO(22); RHO(23);
         // Chi
-        CHI(0);
-        CHI(5);
-        CHI(10);
-        CHI(15);
-        CHI(20);
+        CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
         // Iota
         st64[0] ^= K_RC[r];
     }
