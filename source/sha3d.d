@@ -4,7 +4,7 @@
 /// Authors: $(LINK2 github.com/dd86k, dd86k)
 module sha3d;
 
-public enum SHA3D_VERSION_STRING = "1.2.1";
+public enum SHA3D_VERSION_STRING = "1.2.2";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
