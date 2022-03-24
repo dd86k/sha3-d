@@ -1,5 +1,5 @@
 name "sha3-d"
 description "SHA-3 library package"
 authors "dd86k <dd@dax.moe>"
-copyright "Copyright © 2021, dd86k"
+copyright "Copyright © 2022, dd86k"
 license "BSL-1.0"
