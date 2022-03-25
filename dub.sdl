@@ -1,5 +1,5 @@
 name "sha3-d"
-description "Pure D SHA-3 (Keccak) implementation"
+description "Pure D implementation of SHA-3 (Keccak-f[1600])"
 authors "dd86k <dd@dax.moe>"
 copyright "Copyright © 2022, dd86k"
 license "BSL-1.0"
