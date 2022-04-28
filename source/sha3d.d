@@ -1,16 +1,18 @@
-/// Computes SHA-3 hashes of arbitary data.
+/// Computes SHA-3 hashes of arbitrary data.
 /// Reference: NIST FIPS PUB 202
 /// License: $(LINK2 www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 /// Authors: $(LINK2 github.com/dd86k, dd86k)
 module sha3d;
 
+/// Version string of sha3-d that can be used for runtime diagnostics.
 public enum SHA3D_VERSION_STRING = "1.2.2";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
 
-// 24 rounds
-private immutable ulong[24] K_RC = [
+private enum ROUNDS = 24;
+
+private immutable ulong[ROUNDS] K_RC = [
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
     0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
     0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
@@ -18,12 +20,13 @@ private immutable ulong[24] K_RC = [
     0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
     0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
 ];
-private immutable int[24] K_RHO = [
+// Rho indexes
+private immutable int[ROUNDS] K_RHO = [
      1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
     27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
 ];
 // PI indexes
-private immutable size_t[24] K_PI = [
+private immutable size_t[ROUNDS] K_PI = [
     10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
     15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
 ];
@@ -158,7 +161,7 @@ private:
     {
         version (BigEndian) swap;
 
-        for (size_t round; round < 24; ++round)
+        for (size_t round; round < ROUNDS; ++round)
         {
             // Theta
             THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
