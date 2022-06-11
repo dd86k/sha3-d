@@ -1,17 +1,18 @@
-/// Computes SHA-3 hashes of arbitrary data.
-/// Reference: NIST FIPS PUB 202
+/// Computes SHA-3 hashes of arbitrary data using a native implementation.
+/// Standards: NIST FIPS PUB 202
 /// License: $(LINK2 www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
 /// Authors: $(LINK2 github.com/dd86k, dd86k)
 module sha3d;
 
-/// Version string of sha3-d that can be used for runtime diagnostics.
+/// Version string of sha3-d that can be used for printing purposes.
 public enum SHA3D_VERSION_STRING = "1.2.2";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
 
+/// Number of official rounds for SHA-3.
 private enum ROUNDS = 24;
-
+/// RC constants.
 private immutable ulong[ROUNDS] K_RC = [
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
     0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
@@ -20,12 +21,12 @@ private immutable ulong[ROUNDS] K_RC = [
     0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
     0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
 ];
-// Rho indexes
+/// Rho indexes.
 private immutable int[ROUNDS] K_RHO = [
      1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
     27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
 ];
-// PI indexes
+/// PI indexes.
 private immutable size_t[ROUNDS] K_PI = [
     10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
     15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
@@ -33,12 +34,13 @@ private immutable size_t[ROUNDS] K_PI = [
 
 /// Template API SHA-3/SHAKE implementation using the Keccak[1600] function.
 ///
-/// Supports SHA-3-224, SHA-3-256, SHA-3-384, SHA-3-512, SHAKE-128, and SHAKE-256.
-/// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128,
-/// and SHAKE256 template aliases respectively.
+/// It supports SHA-3 and SHAKE XOFs. Though, it is recommended to use the
+/// SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128, and SHAKE256 template
+/// aliases respectively.
 ///
-/// To make a XOF (like SHAKE-128/256):
+/// Examples:
 /// ---
+/// // Defines SHAKE-128/256 with Template API, OOP API, and helper function.
 /// alias SHAKE128_256 = KECCAK!(128, 256);
 /// alias SHAKE128_256Digest = WrapperDigest!SHAKE128_256;
 /// auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
@@ -46,7 +48,9 @@ private immutable size_t[ROUNDS] K_PI = [
 ///
 /// Params:
 ///   digestSize = Digest size in bits.
-///   shake = Sets SHAKE XOF digest output. For example, KECCAK!(128, 256) results in SHAKE-128/256. Defaults to 0 for SHA-3.
+///   shake = SHAKE XOF digest size in bits. Defaults to 0 for SHA-3.
+///
+/// Throws: No exceptions are thrown.
 public struct KECCAK(uint digestSize, uint shake = 0)
 {
     static if (shake)
@@ -82,9 +86,9 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     
     union
     {
-        private size_t[stateSzSize] stz;  // state (size_t)
+        private size_t[stateSzSize] stz; // state (size_t)
         private ulong[state64Size] st64; // state (ulong)
-        private ubyte[stateSize] st;       // state (ubyte)
+        private ubyte[stateSize] st;     // state (ubyte)
     }
     static assert(st64.sizeof == st.sizeof);
     static assert(stz.sizeof == st.sizeof);
@@ -148,7 +152,8 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         transform;
         
         // Clear potentially sensitive data
-        // State sanitized only if digestSize is less than 1600 bits (200 bytes)
+        // State sanitized only if digestSize is less than state
+        // of 1600 bits, so 200 Bytes.
         static if (digestSizeBytes < 200)
             st[digestSizeBytes..$] = 0;
         bc[] = t = 0;
@@ -296,6 +301,12 @@ private:
     assert(toHexString!(LetterCase.lower)(sha3_512Of("abc")) ==
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e"~
         "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0");
+
+    assert(toHexString!(LetterCase.lower)(shake128Of("abc")) ==
+        "5881092dd818bf5cf8a3ddb793fbcba7");
+
+    assert(toHexString!(LetterCase.lower)(shake256Of("abc")) ==
+        "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739");
 }
 
 /// Structure functions
@@ -306,6 +317,8 @@ private:
     ubyte[1024] data;
     hash.put(data);
     ubyte[28] result = hash.finish();
+    assert(toHexString!(LetterCase.lower)(result) ==
+        "8c6c078646496be04b6f06d0ae323e62bbd0d08201f6a1bbb475ba3e");
 }
 
 /// Template features.
@@ -497,7 +510,8 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
     assert(digestshake256 == cast(ubyte[]) hexString!(
         "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"));
     
-    immutable string longString = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    immutable string longString =
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     
     digest224      = sha3_224Of(longString);
     assert(digest224 == cast(ubyte[]) hexString!
@@ -545,7 +559,7 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
         "3578a7a4ca9137569cdf76ed617d31bb994fca9c1bbf8b184013de8234dfd13a"));
 }
 
-/// OOP API SHA-3/SHAKE implementation aliases.
+/// OOP API SHA-3/SHAKE implementation alias.
 public alias SHA3_224Digest = WrapperDigest!SHA3_224;
 /// Ditto
 public alias SHA3_256Digest = WrapperDigest!SHA3_256;
@@ -601,14 +615,16 @@ public alias SHAKE256Digest = WrapperDigest!SHAKE256;
     import std.string : representation;
     import std.digest.hmac : hmac;
 
+    immutable string input =
+        "The quick brown fox jumps over the lazy dog";
     auto secret = "secret".representation;
     
-    assert("The quick brown fox jumps over the lazy dog"
+    assert(input
         .representation
         .hmac!SHA3_256(secret)
         .toHexString!(LetterCase.lower) ==
 	    "93379fab68fae6d0fde0c816ea8a49fbd3c80f136c6af08bc61df5268d01b4d8");
-    assert("The quick brown fox jumps over the lazy dog"
+    assert(input
         .representation
         .hmac!SHA3_512(secret)
         .toHexString!(LetterCase.lower) ==
@@ -621,30 +637,31 @@ public alias SHAKE256Digest = WrapperDigest!SHAKE256;
 {
     import std.conv : hexString;
     
-    // SHAKE128("", 256)
-    auto shake128_256empty = hexString!(
-        "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
-    // SHAKE256("", 512)
-    auto shake256_512empty = hexString!(
-        "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"~
-        "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be");
-    
-    // SHAKE-128/256
+    // Define SHAKE-128/256
     alias SHAKE128_256 = KECCAK!(128, 256);
     alias SHAKE128_256Digest = WrapperDigest!SHAKE128_256;
     auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
     
-    // Template API
+    // SHAKE128("", 256) =
+    auto shake128_256empty = hexString!(
+        "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
+    
+    // Using Template API
     assert(shake128_256Of("") == shake128_256empty);
     
-    // OOP API
+    // Using OOP API
     Digest shake128_256 = new SHAKE128_256Digest();
     assert(shake128_256.finish() == shake128_256empty);
     
-    // SHAKE-256/512
+    // Define SHAKE-256/512
     alias SHAKE256_512 = KECCAK!(256, 512);
     alias SHAKE256_512Digest = WrapperDigest!SHAKE256_512;
     auto shake256_512Of(T...)(T data) { return digest!(SHAKE256_512, T)(data); }
+    
+    // SHAKE256("", 512) =
+    auto shake256_512empty = hexString!(
+        "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"~
+        "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be");
     
     // Template API
     assert(shake256_512Of("") == shake256_512empty);
