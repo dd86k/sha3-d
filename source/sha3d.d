@@ -1,7 +1,7 @@
 /// Computes SHA-3 hashes of arbitrary data using a native implementation.
 /// Standards: NIST FIPS PUB 202
-/// License: $(LINK2 www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
-/// Authors: $(LINK2 github.com/dd86k, dd86k)
+/// License: $(LINK2 https://www.boost.org/LICENSE_1_0.txt, Boost License 1.0)
+/// Authors: $(LINK2 https://github.com/dd86k, dd86k)
 module sha3d;
 
 /// Version string of sha3-d that can be used for printing purposes.
