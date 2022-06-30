@@ -10,28 +10,6 @@ public enum SHA3D_VERSION_STRING = "1.2.2";
 private import std.digest;
 private import core.bitop : rol, bswap;
 
-/// Number of official rounds for SHA-3.
-private enum ROUNDS = 24;
-/// RC constants.
-private immutable ulong[ROUNDS] K_RC = [
-    0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
-    0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
-    0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
-    0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
-    0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
-    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
-];
-/// Rho indexes.
-private immutable int[ROUNDS] K_RHO = [
-     1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
-    27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
-];
-/// PI indexes.
-private immutable size_t[ROUNDS] K_PI = [
-    10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
-    15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
-];
-
 /// Template API SHA-3/SHAKE implementation using the Keccak[1600] function.
 ///
 /// It supports SHA-3 and SHAKE XOFs. Though, it is recommended to use the
@@ -53,12 +31,36 @@ private immutable size_t[ROUNDS] K_PI = [
 /// Throws: No exceptions are thrown.
 public struct KECCAK(uint digestSize, uint shake = 0)
 {
+    @safe: @nogc: nothrow: pure:
+    
+    /// Number of official rounds for SHA-3.
+    private enum ROUNDS = 24;
+    /// RC constants.
+    private immutable static ulong[ROUNDS] K_RC = [
+        0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
+        0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+        0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+        0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
+        0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
+        0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+    ];
+    /// Rho indexes.
+    private immutable static int[ROUNDS] K_RHO = [
+        1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
+        27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
+    ];
+    /// PI indexes.
+    private immutable static size_t[ROUNDS] K_PI = [
+        10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
+        15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
+    ];
+    
     static if (shake)
     {
         static assert(digestSize == 128 || digestSize == 256,
             "SHAKE digest size must be 128 or 256 bits");
-        static assert(shake > 0 && shake <= 1600,
-            "SHAKE digest size must be between 1 to 1600 bits");
+        static assert(shake >= 8 && shake <= 1600,
+            "SHAKE digest size must be between 8 to 1600 bits");
         private enum digestSizeBytes = shake / 8; /// Digest size in bytes
     }
     else // SHA-3
@@ -69,8 +71,6 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         private enum digestSizeBytes = digestSize / 8; /// Digest size in bytes
     }
     
-    @safe: @nogc: nothrow: pure:
-    
     /// Digest size in bits.
     enum blockSize = (1600 - digestSize * 2); // Required for HMAC.
     
@@ -80,18 +80,18 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     //  1111: SHAKE
     private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
     private enum rate = blockSize / 8; /// Sponge rate in bytes
-    private enum stateSize = 200;
+    private enum stateSize = 200; /// Constant for any derivatives
     private enum state64Size = stateSize / ulong.sizeof;
-    private enum stateSzSize = stateSize / size_t.sizeof;
+    private enum statezSize = stateSize / size_t.sizeof;
     
     union
     {
-        private size_t[stateSzSize] stz; // state (size_t)
+        private size_t[statezSize] stz;  // state (size_t)
         private ulong[state64Size] st64; // state (ulong)
-        private ubyte[stateSize] st;     // state (ubyte)
+        private ubyte[stateSize] state;  // state (ubyte)
     }
-    static assert(st64.sizeof == st.sizeof);
-    static assert(stz.sizeof == st.sizeof);
+    static assert(st64.sizeof == state.sizeof);
+    static assert(stz.sizeof == state.sizeof);
     
     private ulong[5] bc; // transformation data
     private ulong t; // transformation temporary
@@ -109,37 +109,37 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     /// Params: input = Input data to digest
     void put(scope const(ubyte)[] input...) @trusted
     {
-        size_t j = pt;
+        size_t i = pt;
         
         // Process wordwise if properly aligned.
-        if ((j | cast(size_t) input.ptr) % size_t.alignof == 0)
+        if ((i | cast(size_t)input.ptr) % size_t.alignof == 0)
         {
             static assert(rate % size_t.sizeof == 0);
-            foreach (const word; (cast(size_t*) input.ptr)[0 .. input.length / size_t.sizeof])
+            foreach (const word; (cast(size_t*)input.ptr)[0..input.length / size_t.sizeof])
             {
-                stz.ptr[j / size_t.sizeof] ^= word;
-                j += size_t.sizeof;
-                if (j >= rate)
+                stz.ptr[i / size_t.sizeof] ^= word;
+                i += size_t.sizeof;
+                if (i >= rate)
                 {
                     transform;
-                    j = 0;
+                    i = 0;
                 }
             }
-            input = input.ptr[input.length - (input.length % size_t.sizeof) .. input.length];
+            input = input[input.length - (input.length % size_t.sizeof)..input.length];
         }
         
         // Process remainder bytewise.
         foreach (const b; input)
         {
-            st.ptr[j++] ^= b;
-            if (j >= rate)
+            state[i++] ^= b;
+            if (i >= rate)
             {
                 transform;
-                j = 0;
+                i = 0;
             }
         }
         
-        pt = j;
+        pt = i;
     }
     
     /// Returns the finished hash.
@@ -147,17 +147,18 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     /// Returns: Raw digest data.
     ubyte[digestSizeBytes] finish()
     {
-        st[pt] ^= delim;
-        st[rate - 1] ^= 0x80;
+        state[pt] ^= delim;
+        state[rate - 1] ^= 0x80;
         transform;
         
         // Clear potentially sensitive data
         // State sanitized only if digestSize is less than state
         // of 1600 bits, so 200 Bytes.
-        static if (digestSizeBytes < 200)
-            st[digestSizeBytes..$] = 0;
+        static if (digestSizeBytes < stateSize)
+            state[digestSizeBytes..$] = 0;
         bc[] = t = 0;
-        return st[0..digestSizeBytes];
+        
+        return state[0..digestSizeBytes];
     }
     
 private:
