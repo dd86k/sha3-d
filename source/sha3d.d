@@ -86,12 +86,12 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     
     union
     {
-        private size_t[statezSize] stz;  // state (size_t)
-        private ulong[state64Size] st64; // state (ulong)
+        private size_t[statezSize] statez;  // state (size_t)
+        private ulong[state64Size] state64; // state (ulong)
         private ubyte[stateSize] state;  // state (ubyte)
     }
-    static assert(st64.sizeof == state.sizeof);
-    static assert(stz.sizeof == state.sizeof);
+    static assert(state64.sizeof == state.sizeof);
+    static assert(statez.sizeof == state.sizeof);
     
     private ulong[5] bc; // transformation data
     private ulong t; // transformation temporary
@@ -117,7 +117,7 @@ public struct KECCAK(uint digestSize, uint shake = 0)
             static assert(rate % size_t.sizeof == 0);
             foreach (const word; (cast(size_t*)input.ptr)[0..input.length / size_t.sizeof])
             {
-                stz.ptr[i / size_t.sizeof] ^= word;
+                statez.ptr[i / size_t.sizeof] ^= word;
                 i += size_t.sizeof;
                 if (i >= rate)
                 {
@@ -131,7 +131,7 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         // Process remainder bytewise.
         foreach (const b; input)
         {
-            state[i++] ^= b;
+            state.ptr[i++] ^= b;
             if (i >= rate)
             {
                 transform;
@@ -172,7 +172,7 @@ private:
             // Theta
             THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
             THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
-            t = st64[1];
+            t = state64[1];
             // Rho
             RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
             RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
@@ -182,7 +182,7 @@ private:
             // Chi
             CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
             // Iota
-            st64[0] ^= K_RC[round];
+            state64[0] ^= K_RC[round];
         }
 
         version (BigEndian) swap;
@@ -190,69 +190,69 @@ private:
     
     void THETA1(size_t i)
     {
-        bc[i] = st64[i] ^ st64[i + 5] ^ st64[i + 10] ^ st64[i + 15] ^ st64[i + 20];
+        bc[i] = state64[i] ^ state64[i + 5] ^ state64[i + 10] ^ state64[i + 15] ^ state64[i + 20];
     }
     
     void THETA2(size_t i)
     {
         t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
-        st64[     i] ^= t;
-        st64[ 5 + i] ^= t;
-        st64[10 + i] ^= t;
-        st64[15 + i] ^= t;
-        st64[20 + i] ^= t;
+        state64[     i] ^= t;
+        state64[ 5 + i] ^= t;
+        state64[10 + i] ^= t;
+        state64[15 + i] ^= t;
+        state64[20 + i] ^= t;
     }
     
     void RHO(size_t i)
     {
         size_t j = K_PI[i];
-        bc[0] = st64[j];
-        st64[j] = rol(t, K_RHO[i]);
+        bc[0] = state64[j];
+        state64[j] = rol(t, K_RHO[i]);
         t = bc[0];
     }
     
     void CHI(size_t j)
     {
-        bc[0] = st64[j];
-        bc[1] = st64[j + 1];
-        bc[2] = st64[j + 2];
-        bc[3] = st64[j + 3];
-        bc[4] = st64[j + 4];
+        bc[0] = state64[j];
+        bc[1] = state64[j + 1];
+        bc[2] = state64[j + 2];
+        bc[3] = state64[j + 3];
+        bc[4] = state64[j + 4];
 
-        st64[j]     ^= (~bc[1]) & bc[2];
-        st64[j + 1] ^= (~bc[2]) & bc[3];
-        st64[j + 2] ^= (~bc[3]) & bc[4];
-        st64[j + 3] ^= (~bc[4]) & bc[0];
-        st64[j + 4] ^= (~bc[0]) & bc[1];
+        state64[j]     ^= (~bc[1]) & bc[2];
+        state64[j + 1] ^= (~bc[2]) & bc[3];
+        state64[j + 2] ^= (~bc[3]) & bc[4];
+        state64[j + 3] ^= (~bc[4]) & bc[0];
+        state64[j + 4] ^= (~bc[0]) & bc[1];
     }
     
     version (BigEndian)
     void swap()
     {
-        st64[ 0] = bswap(st64[ 0]);
-        st64[ 1] = bswap(st64[ 1]);
-        st64[ 2] = bswap(st64[ 2]);
-        st64[ 3] = bswap(st64[ 3]);
-        st64[ 4] = bswap(st64[ 4]);
-        st64[ 5] = bswap(st64[ 5]);
-        st64[ 6] = bswap(st64[ 6]);
-        st64[ 7] = bswap(st64[ 7]);
-        st64[ 8] = bswap(st64[ 8]);
-        st64[ 9] = bswap(st64[ 9]);
-        st64[10] = bswap(st64[10]);
-        st64[11] = bswap(st64[11]);
-        st64[12] = bswap(st64[12]);
-        st64[13] = bswap(st64[13]);
-        st64[14] = bswap(st64[14]);
-        st64[15] = bswap(st64[15]);
-        st64[16] = bswap(st64[16]);
-        st64[17] = bswap(st64[17]);
-        st64[18] = bswap(st64[18]);
-        st64[19] = bswap(st64[19]);
-        st64[20] = bswap(st64[20]);
-        st64[21] = bswap(st64[21]);
-        st64[22] = bswap(st64[22]);
-        st64[23] = bswap(st64[23]);
+        state64[ 0] = bswap(state64[ 0]);
+        state64[ 1] = bswap(state64[ 1]);
+        state64[ 2] = bswap(state64[ 2]);
+        state64[ 3] = bswap(state64[ 3]);
+        state64[ 4] = bswap(state64[ 4]);
+        state64[ 5] = bswap(state64[ 5]);
+        state64[ 6] = bswap(state64[ 6]);
+        state64[ 7] = bswap(state64[ 7]);
+        state64[ 8] = bswap(state64[ 8]);
+        state64[ 9] = bswap(state64[ 9]);
+        state64[10] = bswap(state64[10]);
+        state64[11] = bswap(state64[11]);
+        state64[12] = bswap(state64[12]);
+        state64[13] = bswap(state64[13]);
+        state64[14] = bswap(state64[14]);
+        state64[15] = bswap(state64[15]);
+        state64[16] = bswap(state64[16]);
+        state64[17] = bswap(state64[17]);
+        state64[18] = bswap(state64[18]);
+        state64[19] = bswap(state64[19]);
+        state64[20] = bswap(state64[20]);
+        state64[21] = bswap(state64[21]);
+        state64[22] = bswap(state64[22]);
+        state64[23] = bswap(state64[23]);
     }
 }
 
