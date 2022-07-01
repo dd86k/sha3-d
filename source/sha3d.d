@@ -5,7 +5,7 @@
 module sha3d;
 
 /// Version string of sha3-d that can be used for printing purposes.
-public enum SHA3D_VERSION_STRING = "1.2.2";
+public enum SHA3D_VERSION_STRING = "1.2.3";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
