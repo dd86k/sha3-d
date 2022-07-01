@@ -188,11 +188,13 @@ private:
         version (BigEndian) swap;
     }
     
+    pragma(inline, true)
     void THETA1(size_t i)
     {
         bc[i] = state64[i] ^ state64[i + 5] ^ state64[i + 10] ^ state64[i + 15] ^ state64[i + 20];
     }
     
+    pragma(inline, true)
     void THETA2(size_t i)
     {
         t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
@@ -203,6 +205,7 @@ private:
         state64[20 + i] ^= t;
     }
     
+    pragma(inline, true)
     void RHO(size_t i)
     {
         size_t j = K_PI[i];
@@ -211,6 +214,7 @@ private:
         t = bc[0];
     }
     
+    pragma(inline, true)
     void CHI(size_t j)
     {
         bc[0] = state64[j];
