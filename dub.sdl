@@ -3,3 +3,11 @@ description "Pure D implementation of SHA-3 (Keccak-f[1600])"
 authors "dd86k <dd@dax.moe>"
 copyright "Copyright © 2022, dd86k"
 license "BSL-1.0"
+
+configuration "default" {
+	targetType "library"
+}
+configuration "trace" {
+	targetType "library"
+	versions "SHA3D_Trace"
+}

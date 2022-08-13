@@ -1,7 +1,6 @@
 # DUB
 .dub
 # Binaries
-sha3-test-*
 *.so
 *.dylib
 *.dll
@@ -11,7 +10,7 @@ sha3-test-*
 *.lib
 *.obj
 *.lst
-sha3-d-test-library
+sha3-d-test-*
 # Docs
 docs/
 docs.json
