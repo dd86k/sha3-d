@@ -13,11 +13,11 @@ private import core.bitop : rol, bswap;
 version (SHA3D_Trace)
     private import std.stdio;
 
-/// Template API SHA-3/SHAKE implementation using the Keccak[1600] function.
+/// Template API SHA-3/SHAKE implementation using the Keccak[1600,24] function.
 ///
 /// It supports SHA-3 and SHAKE XOFs. Though, it is recommended to use the
 /// SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128, and SHAKE256 template
-/// aliases respectively.
+/// aliases.
 ///
 /// Examples:
 /// ---
@@ -40,7 +40,12 @@ public struct KECCAK(uint digestSize, uint shake = 0)
         @safe: @nogc: nothrow: pure:
     }
     
-    /// Number of official rounds for SHA-3.
+    //TODO: Consider moving the definitions as template parameters
+    
+    /// Sponge size. Default is 1600 bits (200 Bytes).
+    /// Must be a power of 25 (25, 50, 100, 200, 400, 800, or 1600).
+    private enum SPONGE = 1600;
+    /// Number of rounds. 24 rounds for SHA-3 and SHAKE.
     private enum ROUNDS = 24;
     /// RC constants.
     private immutable static ulong[ROUNDS] K_RC = [
@@ -66,10 +71,10 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     {
         static assert(digestSize == 128 || digestSize == 256,
             "SHAKE digest size must be 128 or 256 bits");
-        static assert(shake >= 8 && shake <= 1600,
-            "SHAKE digest size must be between 8 to 1600 bits");
+        static assert(shake > 0,
+            "SHAKE digest size must be higher than zero.");
         static assert(shake % 8 == 0,
-            "SHAKE digest size must be a factor of 8.");
+            "SHAKE digest size must be a factor of 25.");
         private enum digestSizeBytes = shake / 8; /// Digest size in bytes
     }
     else // SHA-3
@@ -81,7 +86,7 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     }
     
     /// Digest size in bits.
-    enum blockSize = (1600 - digestSize * 2); // Required for HMAC.
+    enum blockSize = (SPONGE - digestSize * 2); // Required for HMAC.
     
     //  ...0: Reserved
     //    01: SHA-3
@@ -158,24 +163,54 @@ public struct KECCAK(uint digestSize, uint shake = 0)
     {
         state[pt] ^= delim;
         state[rate - 1] ^= 0x80;
-        transform;
         
-        // Clear potentially sensitive data
-        // State sanitized only if digestSize is less than state
-        // of 1600 bits, so 200 Bytes.
-        static if (digestSizeBytes < stateSize)
-            state[digestSizeBytes..$] = 0;
-        bc[] = t = 0;
-        
-        version (SHA3D_Trace)
+        static if (shake)
         {
-            ubyte[digestSizeBytes] r = state[0..digestSizeBytes];
-            writeln("HASH=", toHexString!(LetterCase.lower)(r));
-            return r;
+            ubyte[digestSizeBytes] output = void;
+            
+            size_t i;
+            
+            // Transform at {rate} until output is filled.
+            do
+            {
+                transform;
+                size_t end = i + rate;
+                if (end > digestSizeBytes)
+                {
+                    output[i..$] = state[0..digestSizeBytes - i];
+                    break;
+                }
+                output[i..end] = state[0..rate];
+                i += rate;
+            } while (true);
+            
+            // Clear state of potential sensitive data.
+            state64[] = 0;
+            bc[] = t = 0;
+            
+            return output;
         }
-        else
+        else // SHA-3
         {
-            return state[0..digestSizeBytes];
+            transform;
+            
+            // Clear potentially sensitive data.
+            // State sanitized only if digestSize is less than state
+            // of 1600 bits, so 200 Bytes.
+            static if (digestSizeBytes < stateSize)
+                state[digestSizeBytes..$] = 0;
+            bc[] = t = 0;
+            
+            version (SHA3D_Trace)
+            {
+                ubyte[digestSizeBytes] r = state[0..digestSizeBytes];
+                writeln("HASH=", toHexString!(LetterCase.lower)(r));
+                return r;
+            }
+            else
+            {
+                return state[0..digestSizeBytes];
+            }
         }
     }
     
@@ -715,4 +750,25 @@ else
         Digest shake256_512 = new SHAKE256_512Digest();
         assert(shake256_512.finish() == shake256_512empty);
     }
+}
+
+/// Stretching out XOFs functions to extremes.
+@system unittest
+{
+    import std.conv : hexString;
+    
+    // Define SHAKE-256/2048
+    alias SHAKE256_2048 = KECCAK!(256, 2048);
+    auto shake256_2048Of(T...)(T data) { return digest!(SHAKE256_2048, T)(data); }
+    
+    // SHAKE-256/2048('abc')
+    assert(shake256_2048Of("abc") == hexString!(
+        "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"~
+        "d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e4"~
+        "1385141204f329979fd3047a13c5657724ada64d2470157b3cdc288620944d78"~
+        "dbcddbd912993f0913f164fb2ce95131a2d09a3e6d51cbfc622720d7a75c6334"~
+        "e8a2d7ec71a7cc29cf0ea610eeff1a588290a53000faa79932becec0bd3cd0b3"~
+        "3a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b67"~
+        "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
+        "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
 }
