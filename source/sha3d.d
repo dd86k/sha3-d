@@ -13,11 +13,11 @@ private import core.bitop : rol, bswap;
 version (SHA3D_Trace)
     private import std.stdio;
 
-/// Template API SHA-3/SHAKE implementation using the Keccak[1600,24] function.
+/// Template API SHA-3/SHAKE implementation using the Keccak function.
 ///
-/// It supports SHA-3 and SHAKE XOFs. Though, it is recommended to use the
-/// SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128, and SHAKE256 template
-/// aliases.
+/// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512,
+/// SHAKE128, and SHAKE256 template aliases for NIST FIPS 202 approved
+/// functions.
 ///
 /// Examples:
 /// ---
@@ -76,7 +76,7 @@ public struct KECCAK(uint digestSize,
     ];
     /// Rho indexes.
     private immutable static int[24] K_RHO = [
-        1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
+         1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
         27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
     ];
     /// PI indexes.
@@ -105,7 +105,7 @@ public struct KECCAK(uint digestSize,
         private ubyte[stateSize] state;  // state (ubyte)
     }
     static assert(state64.sizeof == state.sizeof);
-    static assert(statez.sizeof == state.sizeof);
+    static assert(statez.sizeof  == state.sizeof);
     
     private ulong[5] bc; // Transformation data
     private ulong t;     // Transformation temporary
@@ -411,7 +411,7 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
 {
     SHA3_224 hash;
     hash.start();
-    ubyte[1024] data;
+    ubyte[1024] data; // 1024 cleared bytes
     hash.put(data);
     ubyte[28] result = hash.finish();
     assert(toHexString!(LetterCase.lower)(result) ==
