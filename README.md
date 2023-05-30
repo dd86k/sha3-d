@@ -16,6 +16,9 @@ Features:
 - Implementation tested with DMD, GDC, and LDC compilers.
 - Compatible with HMAC templates (`std.digest.hmac`).
 - Creating your own XOFs (e.g., SHAKE-256/1024).
+- Tested against [buffer overflows and infinite loops](https://mouha.be/sha-3-buffer-overflow/).
+  - The unittest is disabled by default since it allocates 4294967296 Bytes (4 GiB) of memory.
+  - The unittest is available as version `TestOverflow`.
 
 Pull Requests accepted.
 

@@ -772,3 +772,35 @@ else
         "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
         "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
 }
+
+version (TestOverflow)
+{
+    /// Testing against buffer overflow
+    // https://mouha.be/sha-3-buffer-overflow/
+    @system unittest
+    {
+        import std.conv : hexString;
+        import core.memory : GC;
+        
+        ubyte[] buf = new ubyte[4294967295];
+        
+        // Test for overflow
+        SHA3_224 sha3_224;
+        sha3_224.put(0);
+        sha3_224.put(buf);
+        
+        GC.free(buf.ptr);
+        
+        assert(sha3_224.finish() == cast(ubyte[]) hexString!(
+            "c5bcc3bc73b5ef45e91d2d7c70b64f196fac08eee4e4acf6e6571ebe"));
+    
+        ubyte[] buf2 = new ubyte[4294967296];
+        
+        // Test for infinite loop
+        sha3_224.start();
+        sha3_224.put(0);
+        sha3_224.put(buf2);
+    
+        GC.free(buf2.ptr);
+    }
+}
