@@ -30,7 +30,7 @@ version (SHA3D_Trace)
 /// Params:
 ///   digestSize = Digest size in bits.
 ///   shake = SHAKE XOF digest size in bits. Defaults to 0 for SHA-3.
-///   sponge = Sponge size in bits, must be a power of 25. Defaults to 1600.
+///   sponge = Sponge size in bits, must be a multiple of 25. Defaults to 1600.
 ///   rounds = Number of rounds for transformation function. Defaults to 24.
 ///
 /// Throws: No exceptions are thrown.
@@ -752,7 +752,7 @@ else
     }
 }
 
-/// Stretching out XOFs functions to extremes.
+/// Making longer digests using XOFs.
 @system unittest
 {
     import std.conv : hexString;
@@ -782,7 +782,7 @@ version (TestOverflow)
         import std.conv : hexString;
         import core.memory : GC;
         
-        ubyte[] buf = new ubyte[4294967295];
+        ubyte[] buf = new ubyte[uint.max];
         
         // Test for overflow
         SHA3_224 sha3_224;
@@ -793,14 +793,47 @@ version (TestOverflow)
         
         assert(sha3_224.finish() == cast(ubyte[]) hexString!(
             "c5bcc3bc73b5ef45e91d2d7c70b64f196fac08eee4e4acf6e6571ebe"));
-    
-        ubyte[] buf2 = new ubyte[4294967296];
+        
+        ubyte[] buf2 = new ubyte[uint.max];
         
         // Test for infinite loop
         sha3_224.start();
         sha3_224.put(0);
         sha3_224.put(buf2);
-    
+        
         GC.free(buf2.ptr);
     }
 }
+
+/// Testing lower sponge sizes
+/+@system unittest
+{
+    // Define SHAKE-128 with a sponge of 800 bits
+    alias TINY = KECCAK!(128, 128, 800);
+    auto tinyOf(T...)(T data) { return digest!(TINY, T)(data); }
+    
+    
+}
+
+/// Using XOF as a PRNG
+@system unittest
+{
+    import std.conv : hexString;
+    
+    // Define SHAKE-256/1024
+    alias SHAKE256_1024 = KECCAK!(256, 1024);
+    
+    SHAKE256_1024 digest;
+    digest.put(cast(ubyte[])"abc"); // Seed ish
+    
+    assert(digest.finish() == hexString!(
+        "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"~
+        "d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e4"~
+        "1385141204f329979fd3047a13c5657724ada64d2470157b3cdc288620944d78"~
+        "dbcddbd912993f0913f164fb2ce95131a2d09a3e6d51cbfc622720d7a75c6334"));
+    assert(digest.finish() == hexString!(
+        "e8a2d7ec71a7cc29cf0ea610eeff1a588290a53000faa79932becec0bd3cd0b3"~
+        "3a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b67"~
+        "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
+        "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
+}+/
