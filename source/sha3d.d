@@ -30,12 +30,12 @@ version (SHA3D_Trace)
 /// Params:
 ///   digestSize = Digest size in bits.
 ///   shake = SHAKE XOF digest size in bits. Defaults to 0 for SHA-3.
-///   sponge = Sponge size in bits, must be a multiple of 25. Defaults to 1600.
+///   width = (b parameter) WIdth size in bits, must be a multiple of 25 up to 1600. Defaults to 1600.
 ///   rounds = Number of rounds for transformation function. Defaults to 24.
 ///
 /// Throws: No exceptions are thrown.
 public struct KECCAK(uint digestSize,
-    uint shake = 0, uint sponge = 1600, size_t rounds = 24)
+    uint shake = 0, uint width = 1600, size_t rounds = 24)
 {
     version (SHA3D_Trace) {}
     else
@@ -43,9 +43,11 @@ public struct KECCAK(uint digestSize,
         @safe: @nogc: nothrow: pure:
     }
     
-    static assert(sponge <= 1600,   "Sponge can't be over 1600 bits.");
-    static assert(sponge % 25 == 0, "Sponge must be a power of 25.");
-    static assert(rounds <= 24,     "Rounds can't be over 24.");
+    static assert(width % 25 == 0, "Width must be a power of 25.");
+    static assert(width <= 1600,   "Width can't be over 1600 bits.");
+    static assert(width >=  200,   "Widths under 200 bits is currently not supported.");
+    static assert(rounds <= 24,    "Rounds can't be over 24.");
+    static assert(rounds  >  0,    "Must have one or more rounds.");
     
     static if (shake)
     {
@@ -86,7 +88,9 @@ public struct KECCAK(uint digestSize,
     ];
     
     /// Digest size in bits.
-    enum blockSize = (sponge - digestSize * 2); // Required for HMAC.
+    ///
+    /// This is not the size of the held state.
+    enum blockSize = (width - digestSize * 2); // Required for HMAC.
     
     //  ...0: Reserved
     //    01: SHA-3
@@ -94,18 +98,18 @@ public struct KECCAK(uint digestSize,
     //  1111: SHAKE
     private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
     private enum rate = blockSize / 8; /// Sponge rate in bytes
-    private enum stateSize = 200; /// Constant for any derivatives
-    private enum state64Size = stateSize / ulong.sizeof;
-    private enum statezSize = stateSize / size_t.sizeof;
+    private enum state8Size = width / 8; /// Constant for any derivatives
+    private enum stateSize = state8Size / ulong.sizeof;
+    private enum statezSize = state8Size / size_t.sizeof;
     
     union
     {
-        private size_t[statezSize] statez;  // state (size_t)
-        private ulong[state64Size] state64; // state (ulong)
-        private ubyte[stateSize] state;  // state (ubyte)
+        private size_t[statezSize] statez; // state (size_t)
+        private ulong[stateSize]   state;  // state
+        private ubyte[state8Size]  state8; // state (ubyte)
     }
-    static assert(state64.sizeof == state.sizeof);
-    static assert(statez.sizeof  == state.sizeof);
+    static assert(state.sizeof == state8.sizeof);
+    static assert(statez.sizeof  == state8.sizeof);
     
     private ulong[5] bc; // Transformation data
     private ulong t;     // Transformation temporary
@@ -145,7 +149,7 @@ public struct KECCAK(uint digestSize,
         // Process remainder bytewise.
         foreach (const b; input)
         {
-            state.ptr[i++] ^= b;
+            state8.ptr[i++] ^= b;
             if (i >= rate)
             {
                 transform;
@@ -161,8 +165,9 @@ public struct KECCAK(uint digestSize,
     /// Returns: Raw digest data.
     ubyte[digestSizeBytes] finish()
     {
-        state[pt] ^= delim;
-        state[rate - 1] ^= 0x80;
+        // Mark delimiter at end of sponge
+        state8[pt] ^= delim;
+        state8[rate - 1] ^= 0x80;
         
         static if (shake)
         {
@@ -177,15 +182,15 @@ public struct KECCAK(uint digestSize,
                 size_t end = i + rate;
                 if (end > digestSizeBytes)
                 {
-                    output[i..$] = state[0..digestSizeBytes - i];
+                    output[i..$] = state8[0..digestSizeBytes - i];
                     break;
                 }
-                output[i..end] = state[0..rate];
+                output[i..end] = state8[0..rate];
                 i += rate;
             } while (true);
             
             // Clear state of potential sensitive data.
-            state64[] = 0;
+            state[] = 0;
             bc[] = t = 0;
             
             return output;
@@ -198,7 +203,7 @@ public struct KECCAK(uint digestSize,
             // State sanitized only if digestSize is less than state
             // of 1600 bits, so 200 Bytes.
             static if (digestSizeBytes < stateSize)
-                state[digestSizeBytes..$] = 0;
+                state8[digestSizeBytes..$] = 0;
             bc[] = t = 0;
             
             version (SHA3D_Trace)
@@ -209,7 +214,7 @@ public struct KECCAK(uint digestSize,
             }
             else
             {
-                return state[0..digestSizeBytes];
+                return state8[0..digestSizeBytes];
             }
         }
     }
@@ -225,7 +230,7 @@ private:
             // Theta
             THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
             THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
-            t = state64[1];
+            t = state[1];
             // Rho
             RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
             RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
@@ -235,13 +240,13 @@ private:
             // Chi
             CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
             // Iota
-            state64[0] ^= K_RC[round];
+            state[0] ^= K_RC[round];
             
             version (SHA3D_Trace)
             {
                 writefln("ROUND=%d", round);
                 int i;
-                foreach (ulong s; state64)
+                foreach (ulong s; state)
                     if (i & 1)
                         writefln(" v[%2d]=%16x", i++, s);
                     else
@@ -256,44 +261,44 @@ private:
     pragma(inline, true)
     void THETA1(size_t i)
     {
-        bc[i] = state64[i] ^ state64[i + 5] ^ state64[i + 10] ^
-            state64[i + 15] ^ state64[i + 20];
+        bc[i] = state[i] ^ state[i + 5] ^ state[i + 10] ^
+            state[i + 15] ^ state[i + 20];
     }
     
     pragma(inline, true)
     void THETA2(size_t i)
     {
         t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
-        state64[     i] ^= t;
-        state64[ 5 + i] ^= t;
-        state64[10 + i] ^= t;
-        state64[15 + i] ^= t;
-        state64[20 + i] ^= t;
+        state[     i] ^= t;
+        state[ 5 + i] ^= t;
+        state[10 + i] ^= t;
+        state[15 + i] ^= t;
+        state[20 + i] ^= t;
     }
     
     pragma(inline, true)
     void RHO(size_t i)
     {
         size_t j = K_PI[i];
-        bc[0] = state64[j];
-        state64[j] = rol(t, K_RHO[i]);
+        bc[0] = state[j];
+        state[j] = rol(t, K_RHO[i]);
         t = bc[0];
     }
     
     pragma(inline, true)
     void CHI(size_t j)
     {
-        bc[0] = state64[j];
-        bc[1] = state64[j + 1];
-        bc[2] = state64[j + 2];
-        bc[3] = state64[j + 3];
-        bc[4] = state64[j + 4];
+        bc[0] = state[j];
+        bc[1] = state[j + 1];
+        bc[2] = state[j + 2];
+        bc[3] = state[j + 3];
+        bc[4] = state[j + 4];
 
-        state64[j]     ^= (~bc[1]) & bc[2];
-        state64[j + 1] ^= (~bc[2]) & bc[3];
-        state64[j + 2] ^= (~bc[3]) & bc[4];
-        state64[j + 3] ^= (~bc[4]) & bc[0];
-        state64[j + 4] ^= (~bc[0]) & bc[1];
+        state[j]     ^= (~bc[1]) & bc[2];
+        state[j + 1] ^= (~bc[2]) & bc[3];
+        state[j + 2] ^= (~bc[3]) & bc[4];
+        state[j + 3] ^= (~bc[4]) & bc[0];
+        state[j + 4] ^= (~bc[0]) & bc[1];
     }
     
     version (BigEndian)
