@@ -11,3 +11,7 @@ configuration "trace" {
 	targetType "library"
 	versions "SHA3D_Trace"
 }
+configuration "test-overflow" {
+	targetType "library"
+	versions "SHA3D_Trace"
+}

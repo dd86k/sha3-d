@@ -5,7 +5,7 @@
 module sha3d;
 
 /// Version string of sha3-d that can be used for printing purposes.
-public enum SHA3D_VERSION_STRING = "1.2.5";
+public enum SHA3D_VERSION_STRING = "1.3.0-dev";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
@@ -13,32 +13,50 @@ private import core.bitop : rol, bswap;
 version (SHA3D_Trace)
     private import std.stdio;
 
+//TODO: Extra delimiter parameters (with delimiter2 and delimiter3)
+//      For TurboSHAKE, there are additional domain separators used.
 /// Template API SHA-3/SHAKE implementation using the Keccak function.
 ///
-/// It is recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512,
-/// SHAKE128, and SHAKE256 template aliases for NIST FIPS 202 approved
-/// functions.
+/// It is highly recommended to use the SHA3_224, SHA3_256, SHA3_384, SHA3_512,
+/// SHAKE128, and SHAKE256 template aliases complying with NIST FIPS 202.
+///
+/// To use SHAKE256 with a different XOF digest size, define an alias as
+/// `KECCAK!(256, 1024)` where 1024 is the output size in bits. For example,
+/// a drop-in replacement for Git hashes could be defined as `KECCAK!(256, 160)`.
+///
+/// Otherwise, the structure template offers a few parameters, mainly
+/// digest size (output size in bits), xof size (xof output size in bits, d parameter)
+/// which overrides digest size if used, width (b parameter in bits),
+/// and number of rounds in the transformation function.
+///
+/// By default, the SHA-3 delimiter (D parameter of 0x06) is used. If the
+/// shake digest size parameter is used, the SHAKE delimiter is used (0x1f).
 ///
 /// Examples:
 /// ---
-/// // Defines SHAKE-128/256 with Template API, OOP API, and helper function.
-/// alias SHAKE128_256 = KECCAK!(128, 256);
-/// alias SHAKE128_256Digest = WrapperDigest!SHAKE128_256;
-/// auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
+/// // Defines SHAKE128-512 XOF with Template API, OOP API, and helper function.
+/// alias SHAKE128_512 = KECCAK!(128, 512);
+/// alias SHAKE128_512Digest = WrapperDigest!SHAKE128_512;
+/// auto shake128_512Of(T...)(T data) { return digest!(SHAKE128_512, T)(data); }
 /// ---
 ///
 /// Params:
 ///   digestSize = Digest size in bits.
-///   shake = SHAKE XOF digest size in bits. Defaults to 0 for SHA-3.
-///   width = (b parameter) WIdth size in bits, must be a multiple of 25 up to 1600. Defaults to 1600.
+///   shakeSize = SHAKE XOF digest size in bits, replacing digest size. Defaults to 0 for SHA-3.
+///   width = Permutation size in bits, must be a multiple of 25 up to 1600. Defaults to 1600.
 ///   rounds = Number of rounds for transformation function. Defaults to 24.
+///
+/// Warning: Other width settings than 1600 could not be currently tested.
+///
+/// This implementation is not compatible with TurboSHAKE, KangarooTwelve,
+/// cSHAKE, and others, because of the extra implementation details requirements
+/// which are currently absent from this implementation.
 ///
 /// Throws: No exceptions are thrown.
 public struct KECCAK(uint digestSize,
-    uint shake = 0, uint width = 1600, size_t rounds = 24)
+    uint shakeSize = 0, uint width = 1600, size_t rounds = 24)
 {
-    version (SHA3D_Trace) {}
-    else
+    version (SHA3D_Trace) {} else
     {
         @safe: @nogc: nothrow: pure:
     }
@@ -46,18 +64,115 @@ public struct KECCAK(uint digestSize,
     static assert(width % 25 == 0, "Width must be a power of 25.");
     static assert(width <= 1600,   "Width can't be over 1600 bits.");
     static assert(width >=  200,   "Widths under 200 bits is currently not supported.");
-    static assert(rounds <= 24,    "Rounds can't be over 24.");
+    static assert(rounds <= 24,    "Can't have more than 24 rounds.");
     static assert(rounds  >  0,    "Must have one or more rounds.");
     
-    static if (shake)
+    // NOTE: Type selection
+    //
+    //       The b (input bits) parameter determines w (width in bits):
+    //
+    //       | b | 25 | 50 | 100 | 200 | 400 | 800 | 1600 | (state size)
+    //       | w |  1 |  2 |   4 |   8 |  16 |  32 |   64 | (word size)
+    //       | l |  0 |  1 |   2 |   3 |   4 |   5 |    6 | (lane size)
+    //
+    //       The official Keccak Team XKCP package only covers down to 200.
+    //       So, w=8:ubyte, w=16:ushort, w=32:uint, and w=64:ulong
+    
+    // NOTE: Rounds
+    //
+    //       Extra rounds would be restarting from the end of the defined arrays:
+    //       "the preceding rounds for KECCAK-p[1600, 30] are indexed by
+    //       the integers from -6 to -1."
+    //       While possible, not supported by any implementation.
+    //
+    //       KeccakTools specifies a number of nominal rounds. They only exist
+    //       in name so they're not really suggestions. They are: 24 for b=1600,
+    //       22 for b=800, 20 for b=400, 18 for b=200, 16 for b=100, 14 for b=50,
+    //       and 12 for b=25.
+    
+    static if (width == 1600)
+    {
+        /// RC values for Keccak-p[1600]
+        private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+            0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
+            0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+            0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+            0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
+            0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
+            0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+        ];
+        private enum K_RHO_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+             1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
+            27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
+        ];
+        alias ktype = ulong;
+    }
+    else static if (width == 800)
+    {
+        /// RC values for Keccak-p[800]
+        private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+            0x00000001, 0x00008082, 0x0000808A, 0x80008000,
+            0x0000808B, 0x80000001, 0x80008081, 0x00008009,
+            0x0000008A, 0x00000088, 0x80008009, 0x8000000A,
+            0x8000808B, 0x0000008B, 0x00008089, 0x00008003,
+            0x00008002, 0x00000080, 0x0000800A, 0x8000000A,
+            0x80008081, 0x00008080, 0x80000001, 0x80008008
+        ];
+        private enum K_RHO_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+             1,  3,  6, 10, 15, 21, 28,  4, 13, 23,  2, 14,
+            27,  9, 24,  8, 25, 11, 30, 18,  7, 29, 20, 12
+        ];
+        alias ktype = uint;
+    }
+    else static if (width == 400)
+    {
+        /// RC values for Keccak-p[400]
+        private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
+            0x0001, 0x8082, 0x808a, 0x8000,
+            0x808b, 0x0001, 0x8081, 0x8009,
+            0x008a, 0x0088, 0x8009, 0x000a,
+            0x808b, 0x008b, 0x8089, 0x8003,
+            0x8002, 0x0080, 0x800a, 0x000a,
+            0x8081, 0x8080, 0x0001, 0x8008
+        ];
+        private enum K_RHO_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+            1,  3, 6, 10, 15,  5, 12, 4, 13,  7, 2, 14,
+            11, 9, 8,  8,  9, 11, 14, 2,  7, 13, 4, 12
+        ];
+        alias ktype = ushort;
+    }
+    else static if (width == 200)
+    {
+        /// RC values for Keccak-p[200]
+        private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
+            0x01, 0x82, 0x8a, 0x00,
+            0x8b, 0x01, 0x81, 0x09,
+            0x8a, 0x88, 0x09, 0x0a,
+            0x8b, 0x8b, 0x89, 0x03,
+            0x02, 0x80, 0x0a, 0x0a,
+            0x81, 0x80, 0x01, 0x08
+        ];
+        private enum K_RHO_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
+            1, 3, 6, 2, 7, 5, 4, 4, 5, 7, 2, 6,
+            3, 1, 0, 0, 1, 3, 6, 2, 7, 5, 4, 4,
+        ];
+        alias ktype = ubyte;
+    }
+    else
+        static assert(0, "Unsupported width parameter");
+    
+    /// RC constants.
+    private immutable static ktype[rounds] K_RC = K_RC_IMPL[0..rounds];
+    
+    static if (shakeSize)
     {
         static assert(digestSize == 128 || digestSize == 256,
             "SHAKE digest size must be 128 or 256 bits");
-        static assert(shake > 0,
+        static assert(shakeSize > 0,
             "SHAKE digest size must be higher than zero.");
-        static assert(shake % 8 == 0,
+        static assert(shakeSize % 8 == 0,
             "SHAKE digest size must be a factor of 25.");
-        private enum digestSizeBytes = shake / 8; /// Digest size in bytes
+        private enum digestSizeBytes = shakeSize / 8; /// Digest size in bytes
     }
     else // SHA-3
     {
@@ -67,58 +182,61 @@ public struct KECCAK(uint digestSize,
         private enum digestSizeBytes = digestSize / 8; /// Digest size in bytes
     }
     
-    /// RC constants.
-    private immutable static ulong[24] K_RC = [
-        0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
-        0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
-        0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
-        0x000000008000808b, 0x800000000000008b, 0x8000000000008089, 0x8000000000008003,
-        0x8000000000008002, 0x8000000000000080, 0x000000000000800a, 0x800000008000000a,
-        0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
-    ];
+    // KeccakRhoOffsets[i] = ((i+1)*(i+2)/2) % w;
+    // NOTE: rol *wants* const int
     /// Rho indexes.
-    private immutable static int[24] K_RHO = [
-         1,  3,  6, 10, 15, 21, 28, 36, 45, 55,  2, 14,
-        27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
-    ];
+    private immutable static int[24] K_RHO = K_RHO_IMPL;
     /// PI indexes.
     private immutable static size_t[24] K_PI = [
         10,  7, 11, 17, 18, 3,  5, 16,  8, 21, 24, 4,
         15, 23, 19, 13, 12, 2, 20, 14, 22,  9,  6, 1
     ];
     
-    /// Digest size in bits.
+    /// Block size in bits as required for HMAC.
     ///
-    /// This is not the size of the held state.
-    enum blockSize = (width - digestSize * 2); // Required for HMAC.
+    /// It is calculated using: width - digestSize * 2.
+    enum blockSize = width - digestSize * 2;
     
-    //  ...0: Reserved
-    //    01: SHA-3
-    // ...11: RawSHAKE
+    //  ..00: Reserved
+    //  ..01: SHA-3
+    //  ..11: RawSHAKE
     //  1111: SHAKE
-    private enum delim = shake ? 0x1f : 0x06; /// Delimiter suffix when finishing
-    private enum rate = blockSize / 8; /// Sponge rate in bytes
-    private enum state8Size = width / 8; /// Constant for any derivatives
-    private enum stateSize = state8Size / ulong.sizeof;
-    private enum statezSize = state8Size / size_t.sizeof;
+    private enum delim = shakeSize ? 0x1f : 0x06; /// Padding delimiter when finishing
+    private enum capacity = width - blockSize; /// Capacity in bits
+    private enum rate = (width - capacity) / 8; /// Sponge rate in bytes (width - capacity)
+    private enum state8Size = width / 8; /// State size in bytes
+    private enum stateSize = state8Size / ktype.sizeof;
     
+    // NOTE: size_t[] statez was removed
+    //       because of misalignment issues when b <= 1600
     union
     {
-        private size_t[statezSize] statez; // state (size_t)
-        private ulong[stateSize]   state;  // state
+        private ktype[stateSize]   state;  // state
         private ubyte[state8Size]  state8; // state (ubyte)
     }
-    static assert(state.sizeof == state8.sizeof);
-    static assert(statez.sizeof  == state8.sizeof);
+    static assert(state.sizeof == state8.sizeof, "State alias mismatch");
     
-    private ulong[5] bc; // Transformation data
-    private ulong t;     // Transformation temporary
+    private ktype[5] bc; // Transformation data
+    private ktype t;     // Transformation temporary
     private size_t pt;   // Left-over sponge pointer
+    
+    version (SHA3D_Trace) // For tests anyway
+    {
+        uint round_counter;
+        bool verbose;
+    }
     
     /// Initiate or reset the state of the instance.
     void start()
     {
         this = typeof(this).init;
+    }
+    
+    version (SHA3D_Trace)
+    void enable_verbose()
+    {
+        verbose = true;
+        writeln("keccak.init capacity=", capacity, " rate=", rate, " statesz=", state8Size);
     }
     
     /// Feed the algorithm with data.
@@ -129,21 +247,25 @@ public struct KECCAK(uint digestSize,
     {
         size_t i = pt;
         
-        // Process wordwise if properly aligned.
-        if ((i | cast(size_t)input.ptr) % size_t.alignof == 0)
+        // Process wordwise if properly word-aligned aligned.
+        // Disabled if the width is lower than 400 (ktype=short).
+        static if (width >= 400)
         {
-            static assert(rate % size_t.sizeof == 0);
-            foreach (const word; (cast(size_t*)input.ptr)[0..input.length / size_t.sizeof])
+            if ((i | cast(ktype)input.ptr) % ktype.alignof == 0)
             {
-                statez[i / size_t.sizeof] ^= word;
-                i += size_t.sizeof;
-                if (i >= rate)
+                static assert(rate % ktype.sizeof == 0);
+                foreach (const word; (cast(ktype*)input.ptr)[0..input.length / ktype.sizeof])
                 {
-                    transform;
-                    i = 0;
+                    state[i / ktype.sizeof] ^= word;
+                    i += size_t.sizeof;
+                    if (i >= rate)
+                    {
+                        transform;
+                        i = 0;
+                    }
                 }
+                input = input[input.length - (input.length % ktype.sizeof)..input.length];
             }
-            input = input[input.length - (input.length % size_t.sizeof)..input.length];
         }
         
         // Process remainder bytewise.
@@ -165,11 +287,11 @@ public struct KECCAK(uint digestSize,
     /// Returns: Raw digest data.
     ubyte[digestSizeBytes] finish()
     {
-        // Mark delimiter at end of sponge
+        // Mark delimiter at end of message and padding at the end of sponge.
         state8[pt] ^= delim;
         state8[rate - 1] ^= 0x80;
         
-        static if (shake)
+        static if (shakeSize)
         {
             ubyte[digestSizeBytes] output = void;
             
@@ -193,6 +315,11 @@ public struct KECCAK(uint digestSize,
             state[] = 0;
             bc[] = t = 0;
             
+            version (SHA3D_Trace)
+            {
+                if (verbose) writeln("HASH=", toHexString!(LetterCase.lower)(output));
+            }
+            
             return output;
         }
         else // SHA-3
@@ -208,8 +335,8 @@ public struct KECCAK(uint digestSize,
             
             version (SHA3D_Trace)
             {
-                ubyte[digestSizeBytes] r = state[0..digestSizeBytes];
-                writeln("HASH=", toHexString!(LetterCase.lower)(r));
+                ubyte[digestSizeBytes] r = state8[0..digestSizeBytes];
+                if (verbose) writeln("HASH=", toHexString!(LetterCase.lower)(r));
                 return r;
             }
             else
@@ -224,6 +351,8 @@ private:
     void transform()
     {
         version (BigEndian) swap;
+        
+        version (SHA3D_Trace) if (verbose) writefln("keccak.transform=%d", ++round_counter);
 
         for (size_t round; round < rounds; ++round)
         {
@@ -244,14 +373,17 @@ private:
             
             version (SHA3D_Trace)
             {
-                writefln("ROUND=%d", round);
-                int i;
-                foreach (ulong s; state)
-                    if (i & 1)
-                        writefln(" v[%2d]=%16x", i++, s);
-                    else
-                        writef("\tv[%2d]=%16x", i++, s);
-                writeln;
+                if (verbose)
+                {
+                    writefln("keccak.round=%d", round + 1);
+                    int i;
+                    foreach (ulong s; state)
+                        if (i & 1)
+                            writefln(" s[%2d]=%16x", i++, s);
+                        else
+                            writef("\ts[%2d]=%16x", i++, s);
+                    writeln;
+                }
             }
         }
 
@@ -343,6 +475,15 @@ public alias SHA3_512 = KECCAK!(512);
 public alias SHAKE128 = KECCAK!(128, 128);
 /// Template alias for SHAKE-256.
 public alias SHAKE256 = KECCAK!(256, 256);
+
+/// Checks block sizes from FIPS PUB 202, used for HMAC.
+@safe unittest
+{
+    static assert(SHA3_224.blockSize / 8 == 144);
+    static assert(SHA3_256.blockSize / 8 == 136);
+    static assert(SHA3_384.blockSize / 8 == 104);
+    static assert(SHA3_512.blockSize / 8 ==  72);
+}
 
 /// Convience alias using the SHA-3 implementation.
 auto sha3_224Of(T...)(T data) { return digest!(SHA3_224, T)(data); }
@@ -636,8 +777,7 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
 }
 
 // Because WrapperDigest requires functions to be nothrow
-version (SHA3D_Trace) {}
-else
+version (SHA3D_Trace) {} else
 {
     /// OOP API SHA-3/SHAKE implementation alias.
     public alias SHA3_224Digest = WrapperDigest!SHA3_224;
@@ -683,40 +823,7 @@ else
         assert(shake256.finish() == cast(ubyte[]) hexString!(
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"));
     }
-}
-
-/// Testing with HMAC
-@system unittest
-{
-    // NOTE: OpenSSL (3.0.1) seems to be incapable of producing a hash
-    //       using SHAKE and HMAC. However, this should work since
-    //       unittests for SHAKE-related hashes are passing.
     
-    import std.ascii : LetterCase;
-    import std.string : representation;
-    import std.digest.hmac : hmac;
-    
-    immutable string input =
-        "The quick brown fox jumps over the lazy dog";
-    auto secret = "secret".representation;
-    
-    assert(input
-        .representation
-        .hmac!SHA3_256(secret)
-        .toHexString!(LetterCase.lower) ==
-	    "93379fab68fae6d0fde0c816ea8a49fbd3c80f136c6af08bc61df5268d01b4d8");
-    assert(input
-        .representation
-        .hmac!SHA3_512(secret)
-        .toHexString!(LetterCase.lower) ==
-	    "394e52da72b28bab49174a0d22cd48eac415de750027e6485ceb945b9948d8ae"~
-        "e656e61e217ac1352a41c66454e2a9ae830fddbdf4f8aa6215c586b88e158ee8");
-}
-
-// because of WrapperDigest
-version (SHA3D_Trace) {}
-else
-{
     /// Testing out various SHAKE XOFs.
     @system unittest
     {
@@ -757,7 +864,7 @@ else
     }
 }
 
-/// Making longer digests using XOFs.
+/// Making digests using XOFs.
 @system unittest
 {
     import std.conv : hexString;
@@ -776,11 +883,47 @@ else
         "3a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b67"~
         "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
         "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
+    
+    // Define SHAKE-256/160
+    // Test: KeccakSum --shake256 --outputbits 160 --hex empty_file
+    alias SHAKE256_160 = KECCAK!(256, 160);
+    auto shake256_160Of(T...)(T data) { return digest!(SHAKE256_160, T)(data); }
+    
+    assert(shake256_160Of("") == hexString!(
+        "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea"));
+}
+
+/// Testing with HMAC
+@system unittest
+{
+    // NOTE: OpenSSL (3.0.1) seems to be incapable of producing a hash
+    //       using SHAKE and HMAC. However, this should work since
+    //       unittests for SHA3+HMAC hashes are already passing.
+    
+    import std.ascii : LetterCase;
+    import std.string : representation;
+    import std.digest.hmac : hmac;
+    
+    string input = "The quick brown fox jumps over the lazy dog";
+    auto secret = "secret".representation;
+    
+    assert(input
+        .representation
+        .hmac!SHA3_256(secret)
+        .toHexString!(LetterCase.lower) ==
+        "93379fab68fae6d0fde0c816ea8a49fbd3c80f136c6af08bc61df5268d01b4d8");
+    assert(input
+        .representation
+        .hmac!SHA3_512(secret)
+        .toHexString!(LetterCase.lower) ==
+        "394e52da72b28bab49174a0d22cd48eac415de750027e6485ceb945b9948d8ae"~
+        "e656e61e217ac1352a41c66454e2a9ae830fddbdf4f8aa6215c586b88e158ee8");
 }
 
 version (TestOverflow)
 {
-    /// Testing against buffer overflow
+    /// Testing against buffer overflow.
+    /// Enabled via "dub test -c test-overflow"
     // https://mouha.be/sha-3-buffer-overflow/
     @system unittest
     {
@@ -810,18 +953,64 @@ version (TestOverflow)
     }
 }
 
-/// Testing lower sponge sizes
+/// K12 tests.
 /+@system unittest
 {
-    // Define SHAKE-128 with a sponge of 800 bits
-    alias TINY = KECCAK!(128, 128, 800);
-    auto tinyOf(T...)(T data) { return digest!(TINY, T)(data); }
+    import std.conv : hexString;
     
+    // Defines primitive Keccak-p[1600,12]
+    // Digest size of 256+8 bits, using SHA-3 delimiter
+    alias K12 = KECCAK!(256, 256, 1600, 12);
+    auto k12Of(T...)(T data) { return digest!(K12, T)(data); }
+    // k12("")= 1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542
     
-}
+    K12 k12;
+    k12.enable_verbose();
+    assert(k12.finish() == hexString!(
+    //assert(k12Of("") == hexString!(
+        "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542"));
+}+/
+
+/// Testing smaller widths.
+/+@system unittest
+{
+    import std.conv : hexString;
+    import std.stdio : writefln;
+    
+    // Keccak-p[800,22]
+    // https://github.com/XKCP/XKCP/blob/master/tests/TestVectors/KeccakF-800-IntermediateValues.txt
+    // The file only goes through 2 sets of arounds, which matches,
+    // test vectors, but this requires at least 4 sets of rounds to finish
+    // since the rate is 36 Bytes (3 rounds + 1 finishing).
+    
+    // Defines primitive Keccak-p[800,22]
+    // Digest size of 256 bits, using SHA-3 delimiter
+    alias KECCAK800 = KECCAK!(256, 0, 800, 22);
+    auto k800Of(T...)(T data) { return digest!(KECCAK800, T)(data); }
+    
+    ubyte[] input = new ubyte[100];
+    input[] = 0;
+    
+    /*
+    5D D4 31 E5 FB C6 04 F4 99 BF A0 23 2F 45 F8 F1
+    42 D0 FF 51 78 F5 39 E5 A7 80 0B F0 64 36 97 AF
+    4C F3 5A BF 24 24 7A 22 15 27 17 88 84 58 68 9F
+    54 D0 5C B1 0E FC F4 1B 91 FA 66 61 9A 59 9E 1A
+    1F 0A 97 A3 87 96 65 AB 68 8D AB AF 15 10 4B E7
+    98 1A 00 34 F3 EF 19 41 76 0E 0A 93 70 80 B2 87
+    96 E9 EF 11
+    */
+    KECCAK800 k800;
+    version (SHA3D_Trace) k800.enable_verbose();
+    k800.put(input);
+    ubyte[32] r = k800.finish();
+    assert(r == hexString!(
+    //assert(k800Of(input) == hexString!(
+        "5dd431e5fbc604f499bfa0232f45f8f142d0ff5178f539e5a7800bf0643697af"));
+}+/
 
 /// Using XOF as a PRNG
-@system unittest
+/+@system unittest
 {
     import std.conv : hexString;
     
