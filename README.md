@@ -18,11 +18,11 @@ Features:
 - Creating your own XOFs (e.g., SHAKE-256/1024).
 - Tested against [buffer overflows and infinite loops](https://mouha.be/sha-3-buffer-overflow/).
   - The unittest is disabled by default since it allocates 4294967296 Bytes (4 GiB) of memory.
-  - The unittest is available as version `TestOverflow`.
+  - The unittest is available as configuration "test-overflow".
 
 Pull Requests accepted.
 
-**If you would like to disclose a vulnerability, please consult [SECURITY.md](../master/.github/SECURITY.md).**
+**Security issue? Consult [SECURITY.md](../master/.github/SECURITY.md).**
 
 # Usage
 
