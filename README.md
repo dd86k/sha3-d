@@ -1,15 +1,15 @@
 # sha3-d
 
-SHA-3 library written entirely in D implementing Keccack-f\[1600,24] and is fully
-compatible with the Phobos Digest API (std.digest).
+This is a SHA-3 library written entirely in D. It implements the Keccak
+hashing algorithm and it is fully compatible with the Phobos Digest API (std.digest).
 
 Introduced in 2015, SHA-3 is the latest member of the SHA family. SHA-3 is
 already used in production-ready projects worlwide, including SQLite3 for both
 internal and download integrity operations. For more information about SHA-3,
 consult [NIST FIPS PUB 202](http://dx.doi.org/10.6028/NIST.FIPS.202) (PDF).
 
-This module implements the six official hashing algorithms: SHA-3-224, SHA-3-256,
-SHA-3-384, SHA-3-512, SHAKE-128 (XOF), and SHAKE-256 (XOF).
+This module implements the six official hashing algorithms:
+SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE-128, and SHAKE-256.
 
 Features:
 - A much faster alternative to keccak-tiny.
@@ -32,7 +32,7 @@ To include it in your project, simply import the `sha3d` package.
 
 If you are unfamiliar with the Digest API, here is a quick summary.
 
-Two APIs are available: Template API and OOP API.
+There are two APIs available: Template API and OOP API.
 
 ### Template API
 
