@@ -62,10 +62,10 @@ public struct KECCAK(uint digestSize,
     }
     
     static assert(width % 25 == 0, "Width must be a power of 25.");
-    static assert(width <= 1600,   "Width can't be over 1600 bits.");
-    static assert(width >=  200,   "Widths under 200 bits is currently not supported.");
-    static assert(rounds <= 24,    "Can't have more than 24 rounds.");
-    static assert(rounds  >  0,    "Must have one or more rounds.");
+    static assert(width <= 1600, "Width can't be over 1600 bits.");
+    static assert(width >=  200, "Widths under 200 bits is currently not supported.");
+    static assert(rounds  <= 24, "Can't have more than 24 rounds.");
+    static assert(rounds   >  0, "Must have one or more rounds.");
     
     // NOTE: Type selection
     //
@@ -90,7 +90,7 @@ public struct KECCAK(uint digestSize,
     //       22 for b=800, 20 for b=400, 18 for b=200, 16 for b=100, 14 for b=50,
     //       and 12 for b=25.
     
-    static if (width == 1600)
+    static if (width >= 1600)
     {
         /// RC values for Keccak-p[1600]
         private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
@@ -107,7 +107,7 @@ public struct KECCAK(uint digestSize,
         ];
         alias ktype = ulong;
     }
-    else static if (width == 800)
+    else static if (width >= 800)
     {
         /// RC values for Keccak-p[800]
         private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
@@ -124,7 +124,7 @@ public struct KECCAK(uint digestSize,
         ];
         alias ktype = uint;
     }
-    else static if (width == 400)
+    else static if (width >= 400)
     {
         /// RC values for Keccak-p[400]
         private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
@@ -141,7 +141,7 @@ public struct KECCAK(uint digestSize,
         ];
         alias ktype = ushort;
     }
-    else static if (width == 200)
+    else static if (width >= 200)
     {
         /// RC values for Keccak-p[200]
         private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
@@ -967,7 +967,7 @@ version (TestOverflow)
     K12 k12;
     k12.enable_verbose();
     assert(k12.finish() == hexString!(
-    //assert(k12Of("") == hexString!(
+    assert(k12Of("") == hexString!(
         "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542"));
 }+/
 
