@@ -500,55 +500,54 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
 
 // Unittests based on https://www.di-mgt.com.au/sha_testvectors.html
 
+/// Internal alias to help compare strings
+private alias toHexLower = toHexString!(LetterCase.lower);
+
 /// Test against empty datasets
 @safe unittest
 {
-    import std.ascii : LetterCase;
-    
-    assert(toHexString!(LetterCase.lower)(sha3_224Of("")) ==
+    assert(sha3_224Of("").toHexLower() ==
         "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7");
 
-    assert(toHexString!(LetterCase.lower)(sha3_256Of("")) ==
+    assert(sha3_256Of("").toHexLower() ==
         "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
 
-    assert(toHexString!(LetterCase.lower)(sha3_384Of("")) ==
+    assert(sha3_384Of("").toHexLower() ==
         "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2a"~
         "c3713831264adb47fb6bd1e058d5f004");
 
-    assert(toHexString!(LetterCase.lower)(sha3_512Of("")) ==
+    assert(sha3_512Of("").toHexLower() ==
         "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6"~
         "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26");
 
-    assert(toHexString!(LetterCase.lower)(shake128Of("")) ==
+    assert(shake128Of("").toHexLower() ==
         "7f9c2ba4e88f827d616045507605853e");
 
-    assert(toHexString!(LetterCase.lower)(shake256Of("")) ==
+    assert(shake256Of("").toHexLower() ==
         "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
 }
 
 /// Using convenience wrappers.
 @safe unittest
 {
-    import std.ascii : LetterCase;
-    
-    assert(toHexString!(LetterCase.lower)(sha3_224Of("abc")) ==
+    assert(sha3_224Of("abc").toHexLower() ==
         "e642824c3f8cf24ad09234ee7d3c766fc9a3a5168d0c94ad73b46fdf");
 
-    assert(toHexString!(LetterCase.lower)(sha3_256Of("abc")) ==
+    assert(sha3_256Of("abc").toHexLower() ==
         "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532");
 
-    assert(toHexString!(LetterCase.lower)(sha3_384Of("abc")) ==
+    assert(sha3_384Of("abc").toHexLower() ==
         "ec01498288516fc926459f58e2c6ad8df9b473cb0fc08c2596da7cf0e49be4b2"~
         "98d88cea927ac7f539f1edf228376d25");
 
-    assert(toHexString!(LetterCase.lower)(sha3_512Of("abc")) ==
+    assert(sha3_512Of("abc").toHexLower() ==
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e"~
         "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0");
 
-    assert(toHexString!(LetterCase.lower)(shake128Of("abc")) ==
+    assert(shake128Of("abc").toHexLower() ==
         "5881092dd818bf5cf8a3ddb793fbcba7");
 
-    assert(toHexString!(LetterCase.lower)(shake256Of("abc")) ==
+    assert(shake256Of("abc").toHexLower() ==
         "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739");
 }
 
@@ -560,15 +559,13 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
     ubyte[1024] data; // 1024 cleared bytes
     hash.put(data);
     ubyte[28] result = hash.finish();
-    assert(toHexString!(LetterCase.lower)(result) ==
+    assert(result.toHexLower() ==
         "8c6c078646496be04b6f06d0ae323e62bbd0d08201f6a1bbb475ba3e");
 }
 
 /// Template API features.
 @safe unittest
 {
-    import std.ascii : LetterCase;
-    
     // NOTE: Because the digest is a structure, it must be passed by reference.
     void doSomething(T)(ref T hash)
         if (isDigest!T)
@@ -578,7 +575,7 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
     SHA3_224 sha;
     sha.start();
     doSomething(sha);
-    assert(toHexString!(LetterCase.lower)(sha.finish()) ==
+    assert(sha.finish().toHexLower() ==
         "bdd5167212d2dc69665f5a8875ab87f23d5ce7849132f56371a19096");
 }
 
@@ -607,173 +604,134 @@ auto shake256Of(T...)(T data) { return digest!(SHAKE256, T)(data); }
 /// Using the digest template API.
 @safe unittest
 {
-    ubyte[28] hash224 = sha3_224Of("abc");
-    assert(hash224 == digest!SHA3_224("abc"));
-
-    ubyte[32] hash256 = sha3_256Of("abc");
-    assert(hash256 == digest!SHA3_256("abc"));
-
-    ubyte[48] hash384 = sha3_384Of("abc");
-    assert(hash384 == digest!SHA3_384("abc"));
-
-    ubyte[64] hash512 = sha3_512Of("abc");
-    assert(hash512 == digest!SHA3_512("abc"));
-
-    ubyte[16] shakeHash128 = shake128Of("abc");
-    assert(shakeHash128 == digest!SHAKE128("abc"));
-
-    ubyte[32] shakeHash256 = shake256Of("abc");
-    assert(shakeHash256 == digest!SHAKE256("abc"));
+    assert(sha3_224Of("abc") == digest!SHA3_224("abc"));
+    assert(sha3_256Of("abc") == digest!SHA3_256("abc"));
+    assert(sha3_384Of("abc") == digest!SHA3_384("abc"));
+    assert(sha3_512Of("abc") == digest!SHA3_512("abc"));
+    assert(shake128Of("abc") == digest!SHAKE128("abc"));
+    assert(shake256Of("abc") == digest!SHAKE256("abc"));
 }
 
 /// Using the template API.
 @system unittest
 {
-    import std.conv : hexString;
-    
     SHA3_224 dgst_sha3_224;
     dgst_sha3_224.put(cast(ubyte[]) "abcdef");
     dgst_sha3_224.start();
     dgst_sha3_224.put(cast(ubyte[]) "");
-    assert(dgst_sha3_224.finish() == cast(ubyte[]) hexString!
+    assert(dgst_sha3_224.finish().toHexLower() ==
         "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7");
     
     SHA3_256 dgst_sha3_256;
     dgst_sha3_256.put(cast(ubyte[]) "abcdef");
     dgst_sha3_256.start();
     dgst_sha3_256.put(cast(ubyte[]) "");
-    assert(dgst_sha3_256.finish() == cast(ubyte[]) hexString!
+    assert(dgst_sha3_256.finish().toHexLower() ==
         "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
     
     SHA3_384 dgst_sha3_384;
     dgst_sha3_384.put(cast(ubyte[]) "abcdef");
     dgst_sha3_384.start();
     dgst_sha3_384.put(cast(ubyte[]) "");
-    assert(dgst_sha3_384.finish() == cast(ubyte[]) hexString!(
+    assert(dgst_sha3_384.finish().toHexLower() ==
         "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2a"
-        ~"c3713831264adb47fb6bd1e058d5f004"));
+        ~"c3713831264adb47fb6bd1e058d5f004");
     
     SHA3_512 dgst_sha3_512;
     dgst_sha3_512.put(cast(ubyte[]) "abcdef");
     dgst_sha3_512.start();
     dgst_sha3_512.put(cast(ubyte[]) "");
-    assert(dgst_sha3_512.finish() == cast(ubyte[]) hexString!(
+    assert(dgst_sha3_512.finish().toHexLower() ==
         "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6"~
-        "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"));
+        "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26");
     
     SHAKE128 dgst_shake128;
     dgst_shake128.put(cast(ubyte[]) "abcdef");
     dgst_shake128.start();
     dgst_shake128.put(cast(ubyte[]) "");
-    assert(dgst_shake128.finish() == cast(ubyte[]) hexString!
+    assert(dgst_shake128.finish().toHexLower() ==
         "7f9c2ba4e88f827d616045507605853e");
     
     SHAKE256 dgst_shake256;
     dgst_shake256.put(cast(ubyte[]) "abcdef");
     dgst_shake256.start();
     dgst_shake256.put(cast(ubyte[]) "");
-    assert(dgst_shake256.finish() == cast(ubyte[]) hexString!
+    assert(dgst_shake256.finish().toHexLower() ==
         "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
 }
 
 /// Convenience wrappers.
 @system unittest
 {
-    import std.conv : hexString;
+    static immutable string a = "a";
     
-    immutable string a = "a";
-    
-    auto digest224      = sha3_224Of(a);
-    assert(digest224 == cast(ubyte[]) hexString!
+    assert(sha3_224Of(a).toHexLower() ==
         "9e86ff69557ca95f405f081269685b38e3a819b309ee942f482b6a8b");
-    auto digest256      = sha3_256Of(a);
-    assert(digest256 == cast(ubyte[]) hexString!
+    assert(sha3_256Of(a).toHexLower() ==
         "80084bf2fba02475726feb2cab2d8215eab14bc6bdd8bfb2c8151257032ecd8b");
-    auto digest384      = sha3_384Of(a);
-    assert(digest384 == cast(ubyte[]) hexString!(
+    assert(sha3_384Of(a).toHexLower() ==
         "1815f774f320491b48569efec794d249eeb59aae46d22bf77dafe25c5edc28d7"~
-        "ea44f93ee1234aa88f61c91912a4ccd9"));
-    auto digest512      = sha3_512Of(a);
-    assert(digest512 == cast(ubyte[]) hexString!(
+        "ea44f93ee1234aa88f61c91912a4ccd9");
+    assert(sha3_512Of(a).toHexLower() ==
         "697f2d856172cb8309d6b8b97dac4de344b549d4dee61edfb4962d8698b7fa80"~
-        "3f4f93ff24393586e28b5b957ac3d1d369420ce53332712f997bd336d09ab02a"));
-    auto digestshake128 = shake128Of(a);
-    assert(digestshake128 == cast(ubyte[]) hexString!
+        "3f4f93ff24393586e28b5b957ac3d1d369420ce53332712f997bd336d09ab02a");
+    assert(shake128Of(a).toHexLower() ==
         "85c8de88d28866bf0868090b3961162b");
-    auto digestshake256 = shake256Of(a);
-    assert(digestshake256 == cast(ubyte[]) hexString!(
-        "867e2cb04f5a04dcbd592501a5e8fe9ceaafca50255626ca736c138042530ba4"));
+    assert(shake256Of(a).toHexLower() ==
+        "867e2cb04f5a04dcbd592501a5e8fe9ceaafca50255626ca736c138042530ba4");
         
-    immutable string abc = "abc";
+    static immutable string abc = "abc";
     
-    digest224      = sha3_224Of(abc);
-    assert(digest224 == cast(ubyte[]) hexString!
+    assert(sha3_224Of(abc).toHexLower() ==
         "e642824c3f8cf24ad09234ee7d3c766fc9a3a5168d0c94ad73b46fdf");
-    digest256      = sha3_256Of(abc);
-    assert(digest256 == cast(ubyte[]) hexString!
+    assert(sha3_256Of(abc).toHexLower() ==
         "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532");
-    digest384      = sha3_384Of(abc);
-    assert(digest384 == cast(ubyte[]) hexString!(
+    assert(sha3_384Of(abc).toHexLower() ==
         "ec01498288516fc926459f58e2c6ad8df9b473cb0fc08c2596da7cf0e49be4b2"~
-        "98d88cea927ac7f539f1edf228376d25"));
-    digest512      = sha3_512Of(abc);
-    assert(digest512 == cast(ubyte[]) hexString!(
+        "98d88cea927ac7f539f1edf228376d25");
+    assert(sha3_512Of(abc).toHexLower() ==
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e"~
-        "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0"));
-    digestshake128 = shake128Of(abc);
-    assert(digestshake128 == cast(ubyte[]) hexString!
+        "10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0");
+    assert(shake128Of(abc).toHexLower() ==
         "5881092dd818bf5cf8a3ddb793fbcba7");
-    digestshake256 = shake256Of(abc);
-    assert(digestshake256 == cast(ubyte[]) hexString!(
-        "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"));
+    assert(shake256Of(abc).toHexLower() ==
+        "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739");
     
     immutable string longString =
         "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     
-    digest224      = sha3_224Of(longString);
-    assert(digest224 == cast(ubyte[]) hexString!
+    assert(sha3_224Of(longString).toHexLower() ==
         "8a24108b154ada21c9fd5574494479ba5c7e7ab76ef264ead0fcce33");
-    digest256      = sha3_256Of(longString);
-    assert(digest256 == cast(ubyte[]) hexString!
+    assert(sha3_256Of(longString).toHexLower() ==
         "41c0dba2a9d6240849100376a8235e2c82e1b9998a999e21db32dd97496d3376");
-    digest384      = sha3_384Of(longString);
-    assert(digest384 == cast(ubyte[]) hexString!(
+    assert(sha3_384Of(longString).toHexLower() ==
         "991c665755eb3a4b6bbdfb75c78a492e8c56a22c5c4d7e429bfdbc32b9d4ad5a"~
-        "a04a1f076e62fea19eef51acd0657c22"));
-    digest512      = sha3_512Of(longString);
-    assert(digest512 == cast(ubyte[]) hexString!(
+        "a04a1f076e62fea19eef51acd0657c22");
+    assert(sha3_512Of(longString).toHexLower() ==
         "04a371e84ecfb5b8b77cb48610fca8182dd457ce6f326a0fd3d7ec2f1e91636d"~
-        "ee691fbe0c985302ba1b0d8dc78c086346b533b49c030d99a27daf1139d6e75e"));
-    digestshake128 = shake128Of(longString);
-    assert(digestshake128 == cast(ubyte[]) hexString!
+        "ee691fbe0c985302ba1b0d8dc78c086346b533b49c030d99a27daf1139d6e75e");
+    assert(shake128Of(longString).toHexLower() ==
         "1a96182b50fb8c7e74e0a707788f55e9");
-    digestshake256 = shake256Of(longString);
-    assert(digestshake256 == cast(ubyte[]) hexString!(
-        "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e3329"));
+    assert(shake256Of(longString).toHexLower() ==
+        "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e3329");
     
     ubyte[] onemilliona = new ubyte[1_000_000];
     onemilliona[] = 'a';
     
-    digest224      = sha3_224Of(onemilliona);
-    assert(digest224 == cast(ubyte[]) hexString!
+    assert(sha3_224Of(onemilliona).toHexLower() ==
         "d69335b93325192e516a912e6d19a15cb51c6ed5c15243e7a7fd653c");
-    digest256      = sha3_256Of(onemilliona);
-    assert(digest256 == cast(ubyte[]) hexString!
+    assert(sha3_256Of(onemilliona).toHexLower() ==
         "5c8875ae474a3634ba4fd55ec85bffd661f32aca75c6d699d0cdcb6c115891c1");
-    digest384      = sha3_384Of(onemilliona);
-    assert(digest384 == cast(ubyte[]) hexString!(
+    assert(sha3_384Of(onemilliona).toHexLower() ==
         "eee9e24d78c1855337983451df97c8ad9eedf256c6334f8e948d252d5e0e7684"~
-        "7aa0774ddb90a842190d2c558b4b8340"));
-    digest512      = sha3_512Of(onemilliona);
-    assert(digest512 == cast(ubyte[]) hexString!(
+        "7aa0774ddb90a842190d2c558b4b8340");
+    assert(sha3_512Of(onemilliona).toHexLower() ==
         "3c3a876da14034ab60627c077bb98f7e120a2a5370212dffb3385a18d4f38859"~
-        "ed311d0a9d5141ce9cc5c66ee689b266a8aa18ace8282a0e0db596c90b0a7b87"));
-    digestshake128 = shake128Of(onemilliona);
-    assert(digestshake128 == cast(ubyte[]) hexString!
+        "ed311d0a9d5141ce9cc5c66ee689b266a8aa18ace8282a0e0db596c90b0a7b87");
+    assert(shake128Of(onemilliona).toHexLower() ==
         "9d222c79c4ff9d092cf6ca86143aa411");
-    digestshake256 = shake256Of(onemilliona);
-    assert(digestshake256 == cast(ubyte[]) hexString!(
-        "3578a7a4ca9137569cdf76ed617d31bb994fca9c1bbf8b184013de8234dfd13a"));
+    assert(shake256Of(onemilliona).toHexLower() ==
+        "3578a7a4ca9137569cdf76ed617d31bb994fca9c1bbf8b184013de8234dfd13a");
 }
 
 // Because WrapperDigest requires functions to be nothrow
@@ -795,33 +753,25 @@ version (SHA3D_Trace) {} else
     /// Using the OOP API.
     @system unittest
     {
-        import std.conv : hexString;
-        
-        SHA3_224Digest sha3_224 = new SHA3_224Digest();
-        assert(sha3_224.finish() == cast(ubyte[]) hexString!
+        assert(new SHA3_224Digest().finish().toHexLower() ==
             "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7");
         
-        SHA3_256Digest sha3_256 = new SHA3_256Digest();
-        assert(sha3_256.finish() == cast(ubyte[]) hexString!
+        assert(new SHA3_256Digest().finish().toHexLower() ==
             "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
         
-        SHA3_384Digest sha3_384 = new SHA3_384Digest();
-        assert(sha3_384.finish() == cast(ubyte[]) hexString!(
+        assert(new SHA3_384Digest().finish().toHexLower() ==
             "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2a"~
-            "c3713831264adb47fb6bd1e058d5f004"));
+            "c3713831264adb47fb6bd1e058d5f004");
         
-        SHA3_512Digest sha3_512 = new SHA3_512Digest();
-        assert(sha3_512.finish() == cast(ubyte[]) hexString!(
+        assert(new SHA3_512Digest().finish().toHexLower() ==
             "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a6"~
-            "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"));
+            "15b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26");
         
-        SHAKE128Digest shake128 = new SHAKE128Digest();
-        assert(shake128.finish() == cast(ubyte[]) hexString!(
-            "7f9c2ba4e88f827d616045507605853e"));
+        assert(new SHAKE128Digest().finish().toHexLower() ==
+            "7f9c2ba4e88f827d616045507605853e");
         
-        SHAKE256Digest shake256 = new SHAKE256Digest();
-        assert(shake256.finish() == cast(ubyte[]) hexString!(
-            "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"));
+        assert(new SHAKE256Digest().finish().toHexLower() ==
+            "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
     }
     
     /// Testing out various SHAKE XOFs.
@@ -867,14 +817,12 @@ version (SHA3D_Trace) {} else
 /// Making digests using XOFs.
 @system unittest
 {
-    import std.conv : hexString;
-    
     // Define SHAKE-256/2048
     alias SHAKE256_2048 = KECCAK!(256, 2048);
     auto shake256_2048Of(T...)(T data) { return digest!(SHAKE256_2048, T)(data); }
     
     // SHAKE-256/2048('abc')
-    assert(shake256_2048Of("abc") == hexString!(
+    assert(shake256_2048Of("abc").toHexLower() ==
         "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"~
         "d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e4"~
         "1385141204f329979fd3047a13c5657724ada64d2470157b3cdc288620944d78"~
@@ -882,15 +830,20 @@ version (SHA3D_Trace) {} else
         "e8a2d7ec71a7cc29cf0ea610eeff1a588290a53000faa79932becec0bd3cd0b3"~
         "3a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b67"~
         "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
-        "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
+        "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412");
     
     // Define SHAKE-256/160
     // Test: KeccakSum --shake256 --outputbits 160 --hex empty_file
     alias SHAKE256_160 = KECCAK!(256, 160);
     auto shake256_160Of(T...)(T data) { return digest!(SHAKE256_160, T)(data); }
     
-    assert(shake256_160Of("") == hexString!(
-        "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea"));
+    assert(shake256_160Of("").toHexLower() == "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea");
+    
+    // Define SHAKE-128/16 (minimum for SHA3VS)
+    alias SHAKE128_16 = KECCAK!(128, 16);
+    auto shake128_16f(T...)(T data) { return digest!(SHAKE128_16, T)(data); }
+    
+    assert(shake128_16f("abc").toHexLower() == "5881");
 }
 
 /// Testing with HMAC
@@ -910,12 +863,12 @@ version (SHA3D_Trace) {} else
     assert(input
         .representation
         .hmac!SHA3_256(secret)
-        .toHexString!(LetterCase.lower) ==
+        .toHexLower() ==
         "93379fab68fae6d0fde0c816ea8a49fbd3c80f136c6af08bc61df5268d01b4d8");
     assert(input
         .representation
         .hmac!SHA3_512(secret)
-        .toHexString!(LetterCase.lower) ==
+        .toHexLower() ==
         "394e52da72b28bab49174a0d22cd48eac415de750027e6485ceb945b9948d8ae"~
         "e656e61e217ac1352a41c66454e2a9ae830fddbdf4f8aa6215c586b88e158ee8");
 }
@@ -939,8 +892,8 @@ version (TestOverflow)
         
         GC.free(buf.ptr);
         
-        assert(sha3_224.finish() == cast(ubyte[]) hexString!(
-            "c5bcc3bc73b5ef45e91d2d7c70b64f196fac08eee4e4acf6e6571ebe"));
+        assert(sha3_224.finish().toHexLower() ==
+            "c5bcc3bc73b5ef45e91d2d7c70b64f196fac08eee4e4acf6e6571ebe");
         
         ubyte[] buf2 = new ubyte[uint.max];
         
