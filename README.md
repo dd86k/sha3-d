@@ -11,6 +11,10 @@ consult [NIST FIPS PUB 202](http://dx.doi.org/10.6028/NIST.FIPS.202) (PDF).
 This module implements the six official hashing algorithms:
 SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE-128, and SHAKE-256.
 
+    ⚠️  Not yet audited by a cryptography expert.
+    
+    Tests are performed against output of other reputable tools.
+
 Features:
 - A much faster alternative to keccak-tiny.
 - Implementation tested with DMD, GDC, and LDC compilers.
