@@ -5,7 +5,7 @@
 module sha3d;
 
 /// Version string of sha3-d that can be used for printing purposes.
-public enum SHA3D_VERSION_STRING = "1.3.0-dev";
+public enum SHA3D_VERSION_STRING = "1.3.0";
 
 private import std.digest;
 private import core.bitop : rol, bswap;
@@ -222,8 +222,8 @@ public struct KECCAK(uint digestSize,
     
     version (SHA3D_Trace) // For tests anyway
     {
-        uint round_counter;
-        bool verbose;
+        uint round_counter; // @suppress(dscanner.style.undocumented_declaration)
+        bool verbose; // @suppress(dscanner.style.undocumented_declaration)
     }
     
     /// Initiate or reset the state of the instance.
@@ -233,13 +233,14 @@ public struct KECCAK(uint digestSize,
     }
     
     version (SHA3D_Trace)
-    void enable_verbose()
+    void enable_verbose() // @suppress(dscanner.style.undocumented_declaration)
     {
         verbose = true;
         writeln("keccak.init capacity=", capacity, " rate=", rate, " statesz=", state8Size);
     }
     
     /// Feed the algorithm with data.
+    ///
     /// Also implements the $(REF isOutputRange, std,range,primitives)
     /// interface for `ubyte` and `const(ubyte)[]`.
     /// Params: input = Input data to digest
@@ -283,8 +284,9 @@ public struct KECCAK(uint digestSize,
     }
     
     /// Returns the finished hash.
+    ///
     /// This also clears part of the state, leaving just the final digest.
-    /// Returns: Raw digest data.
+    /// Returns: Digest.
     ubyte[digestSizeBytes] finish()
     {
         // Mark delimiter at end of message and padding at the end of sponge.
@@ -785,7 +787,7 @@ version (SHA3D_Trace) {} else
         auto shake128_256Of(T...)(T data) { return digest!(SHAKE128_256, T)(data); }
         
         // SHAKE128("", 256) =
-        auto shake128_256empty = hexString!(
+        const auto shake128_256empty = hexString!(
             "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
         
         // Using convenience alias
@@ -801,7 +803,7 @@ version (SHA3D_Trace) {} else
         auto shake256_512Of(T...)(T data) { return digest!(SHAKE256_512, T)(data); }
         
         // SHAKE256("", 512) =
-        auto shake256_512empty = hexString!(
+        const auto shake256_512empty = hexString!(
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f"~
             "d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be");
         
