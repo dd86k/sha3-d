@@ -173,7 +173,7 @@ public struct KECCAK(uint digestSize,
         static assert(shakeSize > 0,
             "SHAKE digest size must be higher than zero.");
         static assert(shakeSize % 8 == 0,
-            "SHAKE digest size must be a factor of 25.");
+            "SHAKE digest size must be a multiple of 8.");
         private enum digestSizeBytes = shakeSize / 8; /// Digest size in bytes
     }
     else // SHA-3
@@ -254,13 +254,13 @@ public struct KECCAK(uint digestSize,
         // Disabled if the width is lower than 400 (ktype=short).
         static if (width >= 400)
         {
-            if ((i | cast(ktype)input.ptr) % ktype.alignof == 0)
+            if ((i | cast(size_t)input.ptr) % ktype.alignof == 0) // ptr width
             {
                 static assert(rate % ktype.sizeof == 0);
                 foreach (const word; (cast(ktype*)input.ptr)[0..input.length / ktype.sizeof])
                 {
                     state[i / ktype.sizeof] ^= word;
-                    i += ktype.sizeof;
+                    i += ktype.sizeof; // word width
                     if (i >= rate)
                     {
                         transform;
@@ -864,6 +864,36 @@ version (SHA3D_Trace) {} else
         "e656e61e217ac1352a41c66454e2a9ae830fddbdf4f8aa6215c586b88e158ee8");
 }
 
+/// Ensure the word-aligned fast path in put() agrees with byte-wise feeding.
+/// Exercises ktype = ulong (width=1600), uint (800), and ushort (400).
+@safe unittest
+{
+    void check(Digest)()
+    {
+        // GC allocation guarantees alignment for any ktype.
+        auto data = new ubyte[200];
+        foreach (i, ref b; data) b = cast(ubyte)((i * 31 + 7) & 0xff);
+
+        Digest fast;
+        fast.start();
+        fast.put(data);
+        auto fastOut = fast.finish();
+
+        Digest slow;
+        slow.start();
+        foreach (b; data)
+            slow.put(b);
+        auto slowOut = slow.finish();
+
+        assert(fastOut == slowOut);
+    }
+
+    check!SHA3_256();
+    check!SHA3_512();
+    check!(KECCAK!(128, 256, 800, 22))();
+    check!(KECCAK!(128, 256, 400, 20))();
+}
+
 /// Keccak-p[400, 20] permutation of an all-zero state.
 /// Reference: XKCP KeccakF-400-IntermediateValues.txt
 @safe unittest
@@ -945,9 +975,6 @@ version (TestOverflow)
     auto k12Of(T...)(T data) { return digest!(K12, T)(data); }
     // k12("")= 1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542
     
-    K12 k12;
-    k12.enable_verbose();
-    assert(k12.finish() == hexString!(
     assert(k12Of("") == hexString!(
         "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542"));
 }+/
