@@ -46,7 +46,9 @@ version (SHA3D_Trace)
 ///   width = Permutation size in bits, must be a multiple of 25 up to 1600. Defaults to 1600.
 ///   rounds = Number of rounds for transformation function. Defaults to 24.
 ///
-/// Warning: Other width settings than 1600 could not be currently tested.
+/// For widths below 400, any digest size that is a multiple of 8 (and
+/// smaller than half the width) is accepted; the standard FIPS 202 digest
+/// sizes are only enforced for width >= 400.
 ///
 /// This implementation is not compatible with TurboSHAKE, KangarooTwelve,
 /// cSHAKE, and others, because of the extra implementation details requirements
@@ -66,6 +68,7 @@ public struct KECCAK(uint digestSize,
     static assert(width >=  200, "Widths under 200 bits are currently not supported.");
     static assert(rounds  <= 24, "Can't have more than 24 rounds.");
     static assert(rounds   >  0, "Must have one or more rounds.");
+    static assert(digestSize > 0, "digestSize must be greater than zero.");
     static assert(digestSize * 2 < width,
         "Capacity (2 * digestSize) must be smaller than width.");
     
@@ -168,8 +171,16 @@ public struct KECCAK(uint digestSize,
     
     static if (shakeSize)
     {
-        static assert(digestSize == 128 || digestSize == 256,
-            "SHAKE digest size must be 128 or 256 bits");
+        static if (width >= 400)
+        {
+            static assert(digestSize == 128 || digestSize == 256,
+                "SHAKE digest size must be 128 or 256 bits");
+        }
+        else
+        {
+            static assert(digestSize % 8 == 0,
+                "For widths below 400, digest size must be a multiple of 8.");
+        }
         static assert(shakeSize > 0,
             "SHAKE digest size must be higher than zero.");
         static assert(shakeSize % 8 == 0,
@@ -178,9 +189,17 @@ public struct KECCAK(uint digestSize,
     }
     else // SHA-3
     {
-        static assert(digestSize == 224 || digestSize == 256 ||
-            digestSize == 384 || digestSize == 512,
-            "SHA-3 digest size must be 224, 256, 384, or 512 bits");
+        static if (width >= 400)
+        {
+            static assert(digestSize == 224 || digestSize == 256 ||
+                digestSize == 384 || digestSize == 512,
+                "SHA-3 digest size must be 224, 256, 384, or 512 bits");
+        }
+        else
+        {
+            static assert(digestSize % 8 == 0,
+                "For widths below 400, digest size must be a multiple of 8.");
+        }
         private enum digestSizeBytes = digestSize / 8; /// Digest size in bytes
     }
     
@@ -865,7 +884,7 @@ version (SHA3D_Trace) {} else
 }
 
 /// Ensure the word-aligned fast path in put() agrees with byte-wise feeding.
-/// Exercises ktype = ulong (width=1600), uint (800), and ushort (400).
+/// Exercises ktype = ulong (1600), uint (800), ushort (400), ubyte (200).
 @safe unittest
 {
     void check(Digest)()
@@ -892,6 +911,7 @@ version (SHA3D_Trace) {} else
     check!SHA3_512();
     check!(KECCAK!(128, 256, 800, 22))();
     check!(KECCAK!(128, 256, 400, 20))();
+    check!(KECCAK!(64, 0, 200, 18))();
 }
 
 /// Keccak-p[400, 20] permutation of an all-zero state.
@@ -906,6 +926,20 @@ version (SHA3D_Trace) {} else
         0x37, 0x03, 0x52, 0x60, 0x75, 0xDC, 0xC9, 0x0E, 0x76, 0xE7,
         0x46, 0x52, 0xA1, 0x59, 0x81, 0x5D, 0x95, 0x6D, 0x14, 0x6E,
         0x3E, 0x63, 0xEE, 0x58, 0xFF, 0x71, 0x4C, 0x71, 0x8E, 0xB3,
+    ];
+    assert(k.state8 == expected);
+}
+
+/// Keccak-p[200, 18] permutation of an all-zero state.
+/// Reference: XKCP KeccakF-200-IntermediateValues.txt
+@safe unittest
+{
+    KECCAK!(64, 0, 200, 18) k;
+    k.transform();
+    static immutable ubyte[25] expected = [
+        0x3C, 0x28, 0x26, 0x84, 0x1C, 0xB3, 0x5C, 0x17, 0x1E, 0xAA,
+        0xE9, 0xB8, 0x11, 0x13, 0x4C, 0xEA, 0xA3, 0x85, 0x2C, 0x69,
+        0xD2, 0xC5, 0xAB, 0xAF, 0xEA,
     ];
     assert(k.state8 == expected);
 }
