@@ -240,7 +240,12 @@ public struct KECCAK(uint digestSize,
     private ktype[5] bc; // Transformation data
     private ktype t;     // Transformation temporary
     private size_t pt;   // Left-over sponge pointer
-    
+    static if (shakeSize)
+    {
+        private bool squeezing;   // XOF has been finalized and is squeezing
+        private size_t squeezePos; // Byte offset into current squeeze block
+    }
+
     version (SHA3D_Trace) // For tests anyway
     {
         uint round_counter; // @suppress(dscanner.style.undocumented_declaration)
@@ -310,43 +315,49 @@ public struct KECCAK(uint digestSize,
     /// Returns: Digest.
     ubyte[digestSizeBytes] finish()
     {
-        // Mark delimiter at end of message and padding at the end of sponge.
-        state8[pt] ^= delim;
-        state8[rate - 1] ^= 0x80;
-        
         static if (shakeSize)
         {
-            ubyte[digestSizeBytes] output = void;
-            
-            size_t i;
-            
-            // Transform at {rate} until output is filled.
-            do
+            // On the first call, mark the delimiter and padding, then start
+            // squeezing. Subsequent calls continue squeezing the stream so
+            // that XOFs can be used as unbounded output generators.
+            if (!squeezing)
             {
-                transform;
-                size_t end = i + rate;
-                if (end > digestSizeBytes)
+                state8[pt] ^= delim;
+                state8[rate - 1] ^= 0x80;
+                squeezePos = rate; // Force a transform before the first byte
+                squeezing = true;
+            }
+
+            ubyte[digestSizeBytes] output = void;
+            size_t o;
+            while (o < digestSizeBytes)
+            {
+                if (squeezePos >= rate)
                 {
-                    output[i..$] = state8[0..digestSizeBytes - i];
-                    break;
+                    transform;
+                    squeezePos = 0;
                 }
-                output[i..end] = state8[0..rate];
-                i += rate;
-            } while (true);
-            
-            // Clear state of potential sensitive data.
-            state[] = 0;
-            bc[] = t = 0;
-            
+                size_t take = rate - squeezePos;
+                if (take > digestSizeBytes - o)
+                    take = digestSizeBytes - o;
+                output[o .. o + take] = state8[squeezePos .. squeezePos + take];
+                o += take;
+                squeezePos += take;
+            }
+
             version (SHA3D_Trace)
             {
                 if (verbose) writeln("HASH=", toHexString!(LetterCase.lower)(output));
             }
-            
+
             return output;
         }
         else // SHA-3
         {
+            // Mark delimiter at end of message and padding at the end of sponge.
+            state8[pt] ^= delim;
+            state8[rate - 1] ^= 0x80;
+
             transform;
             
             // Clear potentially sensitive data.
@@ -998,21 +1009,6 @@ version (TestOverflow)
     }
 }
 
-/// K12 tests.
-/+@system unittest
-{
-    import std.conv : hexString;
-    
-    // Defines primitive Keccak-p[1600,12]
-    // Digest size of 256+8 bits, using SHA-3 delimiter
-    alias K12 = KECCAK!(256, 256, 1600, 12);
-    auto k12Of(T...)(T data) { return digest!(K12, T)(data); }
-    // k12("")= 1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542
-    
-    assert(k12Of("") == hexString!(
-        "1ac2d450fc3b4205d19da7bfca1b37513c0803577ac7167f06fe2ce1f0ef39e542"));
-}+/
-
 /// Testing smaller widths.
 /+@system unittest
 {
@@ -1051,17 +1047,17 @@ version (TestOverflow)
         "5dd431e5fbc604f499bfa0232f45f8f142d0ff5178f539e5a7800bf0643697af"));
 }+/
 
-/// Using XOF as a PRNG
-/+@system unittest
+/// Using XOF as a PRNG: repeated finish() must continue the squeeze stream.
+@system unittest
 {
     import std.conv : hexString;
-    
+
     // Define SHAKE-256/1024
     alias SHAKE256_1024 = KECCAK!(256, 1024);
-    
+
     SHAKE256_1024 digest;
     digest.put(cast(ubyte[])"abc"); // Seed ish
-    
+
     assert(digest.finish() == hexString!(
         "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739"~
         "d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e4"~
@@ -1072,4 +1068,4 @@ version (TestOverflow)
         "3a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b67"~
         "7513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195"~
         "bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412"));
-}+/
+}
