@@ -61,11 +61,13 @@ public struct KECCAK(uint digestSize,
         @safe: @nogc: nothrow: pure:
     }
     
-    static assert(width % 25 == 0, "Width must be a power of 25.");
+    static assert(width % 25 == 0, "Width must be a multiple of 25.");
     static assert(width <= 1600, "Width can't be over 1600 bits.");
-    static assert(width >=  200, "Widths under 200 bits is currently not supported.");
+    static assert(width >=  200, "Widths under 200 bits are currently not supported.");
     static assert(rounds  <= 24, "Can't have more than 24 rounds.");
     static assert(rounds   >  0, "Must have one or more rounds.");
+    static assert(digestSize * 2 < width,
+        "Capacity (2 * digestSize) must be smaller than width.");
     
     // NOTE: Type selection
     //
@@ -127,7 +129,7 @@ public struct KECCAK(uint digestSize,
     else static if (width >= 400)
     {
         /// RC values for Keccak-p[400]
-        private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
+        private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
             0x0001, 0x8082, 0x808a, 0x8000,
             0x808b, 0x0001, 0x8081, 0x8009,
             0x008a, 0x0088, 0x8009, 0x000a,
@@ -144,7 +146,7 @@ public struct KECCAK(uint digestSize,
     else static if (width >= 200)
     {
         /// RC values for Keccak-p[200]
-        private enum K_RC = [ // @suppress(dscanner.performance.enum_array_literal)
+        private enum K_RC_IMPL = [ // @suppress(dscanner.performance.enum_array_literal)
             0x01, 0x82, 0x8a, 0x00,
             0x8b, 0x01, 0x81, 0x09,
             0x8a, 0x88, 0x09, 0x0a,
@@ -438,30 +440,17 @@ private:
     version (BigEndian)
     void swap()
     {
-        state64[ 0] = bswap(state64[ 0]);
-        state64[ 1] = bswap(state64[ 1]);
-        state64[ 2] = bswap(state64[ 2]);
-        state64[ 3] = bswap(state64[ 3]);
-        state64[ 4] = bswap(state64[ 4]);
-        state64[ 5] = bswap(state64[ 5]);
-        state64[ 6] = bswap(state64[ 6]);
-        state64[ 7] = bswap(state64[ 7]);
-        state64[ 8] = bswap(state64[ 8]);
-        state64[ 9] = bswap(state64[ 9]);
-        state64[10] = bswap(state64[10]);
-        state64[11] = bswap(state64[11]);
-        state64[12] = bswap(state64[12]);
-        state64[13] = bswap(state64[13]);
-        state64[14] = bswap(state64[14]);
-        state64[15] = bswap(state64[15]);
-        state64[16] = bswap(state64[16]);
-        state64[17] = bswap(state64[17]);
-        state64[18] = bswap(state64[18]);
-        state64[19] = bswap(state64[19]);
-        state64[20] = bswap(state64[20]);
-        state64[21] = bswap(state64[21]);
-        state64[22] = bswap(state64[22]);
-        state64[23] = bswap(state64[23]);
+        static if (ktype.sizeof >= 4)
+        {
+            foreach (ref s; state)
+                s = bswap(s);
+        }
+        else static if (ktype.sizeof == 2)
+        {
+            foreach (ref s; state)
+                s = cast(ktype)((s << 8) | (s >> 8));
+        }
+        // ktype.sizeof == 1: byte swap is a no-op
     }
 }
 
