@@ -48,7 +48,8 @@ SHA3_256 sha3_256;
 sha3_256.put("abc");
 assert(sha3_256.finish() == cast(ubyte[])
     hexString!"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532");
-sha3_256.start();
+
+sha3_256.start(); // Reset
 sha3_256.put("abcdef");
 assert(sha3_256.finish() == cast(ubyte[])
     hexString!"a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
@@ -64,14 +65,15 @@ Digest sha3_256 = new SHA3_256Digest();
 sha3_256.put("abc");
 assert(sha3_256.finish() == cast(ubyte[])
     hexString!"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532");
-sha3_256.start();
+
+sha3_256.start(); // Reset
 sha3_256.put("abcdef");
 assert(sha3_256.finish() == cast(ubyte[])
     hexString!"a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
 ```
 
-There are numerous ways to avoid GC allocation. For example when only using a
-digest for a one-time use in a short scope, there's `std.typecons.scoped`.
+There are numerous ways to avoid GC allocation. For example, when using a digest
+in a function scope, you can perform a scoped allocation (`scope dgst = new ...`).
 
 # License
 
