@@ -359,9 +359,9 @@ public struct KECCAK(uint digestSize,
             transform;
             
             // Clear potentially sensitive data.
-            // State sanitized only if digestSize is less than state
-            // of 1600 bits, so 200 Bytes.
-            static if (digestSizeBytes < stateSize)
+            // State sanitized only if digest is smaller than the state
+            // size in Bytes (e.g., 200 Bytes for 1600 bits).
+            static if (digestSizeBytes < state8Size)
                 state8[digestSizeBytes..$] = 0;
             
             version (SHA3D_Trace)
