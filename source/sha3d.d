@@ -50,9 +50,12 @@ version (SHA3D_Trace)
 /// smaller than half the width) is accepted; the standard FIPS 202 digest
 /// sizes are only enforced for width >= 400.
 ///
-/// This implementation is not compatible with TurboSHAKE, KangarooTwelve,
-/// cSHAKE, and others, because of the extra implementation details requirements
-/// which are currently absent from this implementation.
+/// With rounds set to 12, this matches the TurboSHAKE permutation
+/// (Keccak-p[1600,12]). Since the default SHAKE delimiter (0x1f) is also
+/// the default TurboSHAKE domain separation byte, KECCAK!(128, d, 1600, 12)
+/// is TurboSHAKE128 and KECCAK!(256, d, 1600, 12) is TurboSHAKE256, both
+/// with D=0x1f (RFC 9861). Other domain separation bytes, KangarooTwelve,
+/// and cSHAKE are currently not supported.
 ///
 /// Throws: No exceptions are thrown.
 public struct KECCAK(uint digestSize,
@@ -66,7 +69,8 @@ public struct KECCAK(uint digestSize,
     static assert(width % 25 == 0, "Width must be a multiple of 25.");
     static assert(width <= 1600, "Width can't be over 1600 bits.");
     static assert(width >=  200, "Widths under 200 bits are currently not supported.");
-    static assert(rounds  <= 24, "Can't have more than 24 rounds.");
+    static assert(rounds <= nominalRounds,
+        "Can't have more rounds than the nominal count for this width.");
     static assert(rounds   >  0, "Must have one or more rounds.");
     static assert(digestSize > 0, "digestSize must be greater than zero.");
     static assert(digestSize * 2 < width,
@@ -85,15 +89,20 @@ public struct KECCAK(uint digestSize,
     
     // NOTE: Rounds
     //
+    //       FIPS 202 defines Keccak-p[b, nr] as the *last* nr rounds of
+    //       Keccak-f[b], with round indices going from 12+2l-nr to 12+2l-1.
+    //       So, reduced-round variants take RC constants from the end of
+    //       the table. For example, Keccak-p[1600,12] (the TurboSHAKE and
+    //       KangarooTwelve permutation) uses RC[12..24].
+    //
     //       Extra rounds would be restarting from the end of the defined arrays:
     //       "the preceding rounds for KECCAK-p[1600, 30] are indexed by
     //       the integers from -6 to -1."
     //       While possible, not supported by any implementation.
     //
-    //       KeccakTools specifies a number of nominal rounds. They only exist
-    //       in name so they're not really suggestions. They are: 24 for b=1600,
-    //       22 for b=800, 20 for b=400, 18 for b=200, 16 for b=100, 14 for b=50,
-    //       and 12 for b=25.
+    //       The nominal number of rounds is 12+2l: 24 for b=1600,
+    //       22 for b=800, 20 for b=400, 18 for b=200, 16 for b=100,
+    //       14 for b=50, and 12 for b=25.
     
     static if (width >= 1600)
     {
@@ -111,6 +120,7 @@ public struct KECCAK(uint digestSize,
             27, 41, 56,  8, 25, 43, 62, 18, 39, 61, 20, 44
         ];
         alias ktype = ulong;
+        private enum nominalRounds = 24;
     }
     else static if (width >= 800)
     {
@@ -128,6 +138,7 @@ public struct KECCAK(uint digestSize,
             27,  9, 24,  8, 25, 11, 30, 18,  7, 29, 20, 12
         ];
         alias ktype = uint;
+        private enum nominalRounds = 22;
     }
     else static if (width >= 400)
     {
@@ -145,6 +156,7 @@ public struct KECCAK(uint digestSize,
             11, 9, 8,  8,  9, 11, 14, 2,  7, 13, 4, 12
         ];
         alias ktype = ushort;
+        private enum nominalRounds = 20;
     }
     else static if (width >= 200)
     {
@@ -162,12 +174,17 @@ public struct KECCAK(uint digestSize,
             3, 1, 0, 0, 1, 3, 6, 2, 7, 5, 4, 4,
         ];
         alias ktype = ubyte;
+        private enum nominalRounds = 18;
     }
     else
         static assert(0, "Unsupported width parameter");
     
     /// RC constants.
-    private immutable static ktype[rounds] K_RC = K_RC_IMPL[0..rounds];
+    ///
+    /// Keccak-p[b, nr] uses round indices 12+2l-nr to 12+2l-1, so
+    /// reduced-round variants take the last constants, not the first.
+    private immutable static ktype[rounds] K_RC =
+        K_RC_IMPL[nominalRounds - rounds..nominalRounds];
     
     static if (shakeSize)
     {
@@ -270,13 +287,22 @@ public struct KECCAK(uint digestSize,
     /// Params: input = Input data to digest
     void put(scope const(ubyte)[] input...) @trusted
     {
+        static if (shakeSize)
+            assert(squeezing == false,
+                "Cannot put data once squeezing has started, call start() to reset.");
+
         size_t i = pt;
         
         // Process wordwise if properly word-aligned aligned.
         // Disabled if the width is lower than 400 (ktype=short).
         static if (width >= 400)
         {
-            if ((i | cast(size_t)input.ptr) % ktype.alignof == 0) // ptr width
+            // NOTE: Compared against ktype.sizeof, not ktype.alignof,
+            //       because the word-indexed state math below requires it.
+            //       On some ABIs alignof < sizeof (e.g., ulong.alignof == 4
+            //       on 32-bit x86 Linux), which would pass an alignof check
+            //       while state[i / ktype.sizeof] lands on the wrong lane.
+            if ((i | cast(size_t)input.ptr) % ktype.sizeof == 0) // ptr width
             {
                 static assert(rate % ktype.sizeof == 0);
                 foreach (const word; (cast(ktype*)input.ptr)[0..input.length / ktype.sizeof])
@@ -309,7 +335,10 @@ public struct KECCAK(uint digestSize,
     
     /// Returns the finished hash.
     ///
-    /// This also clears part of the state, leaving just the final digest.
+    /// For SHA-3, this resets the state, following the std.digest
+    /// convention, making the instance immediately reusable. For SHAKE,
+    /// the state is kept so that further calls continue the XOF output
+    /// stream; call start() to reset it.
     /// Returns: Digest.
     ubyte[digestSizeBytes] finish()
     {
@@ -357,23 +386,19 @@ public struct KECCAK(uint digestSize,
             state8[rate - 1] ^= 0x80;
 
             transform;
-            
-            // Clear potentially sensitive data.
-            // State sanitized only if digest is smaller than the state
-            // size in Bytes (e.g., 200 Bytes for 1600 bits).
-            static if (digestSizeBytes < state8Size)
-                state8[digestSizeBytes..$] = 0;
-            
+
+            ubyte[digestSizeBytes] output = state8[0..digestSizeBytes];
+
             version (SHA3D_Trace)
             {
-                ubyte[digestSizeBytes] r = state8[0..digestSizeBytes];
-                if (verbose) writeln("HASH=", toHexString!(LetterCase.lower)(r));
-                return r;
+                if (verbose) writeln("HASH=", toHexString!(LetterCase.lower)(output));
             }
-            else
-            {
-                return state8[0..digestSizeBytes];
-            }
+
+            // Reset the state, following the std.digest convention.
+            // This also clears potentially sensitive data.
+            start();
+
+            return output;
         }
     }
     
@@ -609,6 +634,21 @@ private alias toHexLower = toHexString!(LetterCase.lower);
     doSomething(sha);
     assert(sha.finish().toHexLower() ==
         "bdd5167212d2dc69665f5a8875ab87f23d5ce7849132f56371a19096");
+}
+
+/// finish() resets SHA-3 digests, following the std.digest convention,
+/// so instances are directly reusable.
+@safe unittest
+{
+    import std.string : representation;
+
+    SHA3_256 hash;
+    hash.start();
+    hash.put("abc".representation);
+    ubyte[32] first = hash.finish();
+    // No start() call needed in-between.
+    hash.put("abc".representation);
+    assert(hash.finish() == first);
 }
 
 /// This module conforms to the Digest API.
@@ -878,6 +918,39 @@ version (SHA3D_Trace) {} else
     assert(shake128_16f("abc").toHexLower() == "5881");
 }
 
+/// TurboSHAKE via reduced-round instantiations, using the default
+/// domain separation byte (D=0x1f). Test vectors from RFC 9861.
+@system unittest
+{
+    import std.conv : hexString;
+
+    // TurboSHAKE128: Keccak-p[1600,12] with a rate of 168 Bytes.
+    alias TurboSHAKE128 = KECCAK!(128, 256, 1600, 12);
+    auto turboshake128Of(T...)(T data) { return digest!(TurboSHAKE128, T)(data); }
+
+    // TurboSHAKE128(M=``, D=`1F`, 32)
+    assert(turboshake128Of("") == hexString!(
+        "1e415f1c5983aff2169217277d17bb538cd945a397ddec541f1ce41af2c1b74c"));
+
+    // TurboSHAKE256: Keccak-p[1600,12] with a rate of 136 Bytes.
+    alias TurboSHAKE256 = KECCAK!(256, 512, 1600, 12);
+    auto turboshake256Of(T...)(T data) { return digest!(TurboSHAKE256, T)(data); }
+
+    // TurboSHAKE256(M=``, D=`1F`, 64)
+    assert(turboshake256Of("") == hexString!(
+        "367a329dafea871c7802ec67f905ae13c57695dc2c6663c61035f59a18f8e7db"~
+        "11edc0e12e91ea60eb6b32df06dd7f002fbafabb6e13ec1cc20d995547600db0"));
+
+    // ptn(n) repeats the pattern `00 01 02 .. FA` truncated to n bytes.
+    ubyte[] ptn = new ubyte[17 * 17];
+    foreach (i, ref b; ptn)
+        b = cast(ubyte)(i % 251);
+
+    // TurboSHAKE128(M=ptn(17**2), D=`1F`, 32)
+    assert(turboshake128Of(ptn) == hexString!(
+        "96c77c279e0126f7fc07c9b07f5cdae1e0be60bdbe10620040e75d7223a624d2"));
+}
+
 /// Testing with HMAC
 @system unittest
 {
@@ -927,6 +1000,15 @@ version (SHA3D_Trace) {} else
         auto slowOut = slow.finish();
 
         assert(fastOut == slowOut);
+
+        // Start the sponge at a non-word-aligned offset to exercise the
+        // fast path alignment check (regression for ABIs where
+        // ktype.alignof < ktype.sizeof, like ulong on 32-bit x86 Linux).
+        Digest offset;
+        offset.start();
+        offset.put(data[0..4]);
+        offset.put(data[4..$]);
+        assert(offset.finish() == slowOut);
     }
 
     check!SHA3_256();
