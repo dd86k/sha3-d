@@ -237,8 +237,6 @@ public struct KECCAK(uint digestSize,
     }
     static assert(state.sizeof == state8.sizeof, "State alias mismatch");
     
-    private ktype[5] bc; // Transformation data
-    private ktype t;     // Transformation temporary
     private size_t pt;   // Left-over sponge pointer
     static if (shakeSize)
     {
@@ -365,7 +363,6 @@ public struct KECCAK(uint digestSize,
             // of 1600 bits, so 200 Bytes.
             static if (digestSizeBytes < stateSize)
                 state8[digestSizeBytes..$] = 0;
-            bc[] = t = 0;
             
             version (SHA3D_Trace)
             {
@@ -388,30 +385,42 @@ private:
         
         version (SHA3D_Trace) if (verbose) writefln("keccak.transform=%d", ++round_counter);
 
+        // NOTE: Locals over fields
+        //
+        //       The state is copied to a local array for the duration of
+        //       the rounds. Fields are reached through `this`, which the
+        //       optimizer must assume aliases other memory, forcing every
+        //       step through memory. Locals can be kept in registers.
+        ktype[stateSize] st = state;
+        ktype[5] bc = void; // Transformation data
+        ktype t = void;     // Transformation temporary
+
         for (size_t round; round < rounds; ++round)
         {
             // Theta
-            THETA1(0); THETA1(1); THETA1(2); THETA1(3); THETA1(4);
-            THETA2(0); THETA2(1); THETA2(2); THETA2(3); THETA2(4);
-            t = state[1];
+            THETA1(st, bc, 0); THETA1(st, bc, 1); THETA1(st, bc, 2);
+            THETA1(st, bc, 3); THETA1(st, bc, 4);
+            THETA2(st, bc, t, 0); THETA2(st, bc, t, 1); THETA2(st, bc, t, 2);
+            THETA2(st, bc, t, 3); THETA2(st, bc, t, 4);
+            t = st[1];
             // Rho
-            RHO(0); RHO(1); RHO(2); RHO(3); RHO(4);
-            RHO(5); RHO(6); RHO(7); RHO(8); RHO(9);
-            RHO(10); RHO(11); RHO(12); RHO(13); RHO(14);
-            RHO(15); RHO(16); RHO(17); RHO(18); RHO(19);
-            RHO(20); RHO(21); RHO(22); RHO(23);
+            RHO(st, t, 0); RHO(st, t, 1); RHO(st, t, 2); RHO(st, t, 3); RHO(st, t, 4);
+            RHO(st, t, 5); RHO(st, t, 6); RHO(st, t, 7); RHO(st, t, 8); RHO(st, t, 9);
+            RHO(st, t, 10); RHO(st, t, 11); RHO(st, t, 12); RHO(st, t, 13); RHO(st, t, 14);
+            RHO(st, t, 15); RHO(st, t, 16); RHO(st, t, 17); RHO(st, t, 18); RHO(st, t, 19);
+            RHO(st, t, 20); RHO(st, t, 21); RHO(st, t, 22); RHO(st, t, 23);
             // Chi
-            CHI(0); CHI(5); CHI(10); CHI(15); CHI(20);
+            CHI(st, bc, 0); CHI(st, bc, 5); CHI(st, bc, 10); CHI(st, bc, 15); CHI(st, bc, 20);
             // Iota
-            state[0] ^= K_RC[round];
-            
+            st[0] ^= K_RC[round];
+
             version (SHA3D_Trace)
             {
                 if (verbose)
                 {
                     writefln("keccak.round=%d", round + 1);
                     int i;
-                    foreach (ulong s; state)
+                    foreach (ulong s; st)
                         if (i & 1)
                             writefln(" s[%2d]=%16x", i++, s);
                         else
@@ -421,50 +430,52 @@ private:
             }
         }
 
+        state = st;
+
         version (BigEndian) swap;
     }
-    
+
     pragma(inline, true)
-    void THETA1(size_t i)
+    static void THETA1(ref ktype[stateSize] st, ref ktype[5] bc, size_t i)
     {
-        bc[i] = state[i] ^ state[i + 5] ^ state[i + 10] ^
-            state[i + 15] ^ state[i + 20];
+        bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^
+            st[i + 15] ^ st[i + 20];
     }
-    
+
     pragma(inline, true)
-    void THETA2(size_t i)
+    static void THETA2(ref ktype[stateSize] st, ref ktype[5] bc, ref ktype t, size_t i)
     {
         t = bc[(i + 4) % 5] ^ rol(bc[(i + 1) % 5], 1);
-        state[     i] ^= t;
-        state[ 5 + i] ^= t;
-        state[10 + i] ^= t;
-        state[15 + i] ^= t;
-        state[20 + i] ^= t;
+        st[     i] ^= t;
+        st[ 5 + i] ^= t;
+        st[10 + i] ^= t;
+        st[15 + i] ^= t;
+        st[20 + i] ^= t;
     }
-    
+
     pragma(inline, true)
-    void RHO(size_t i)
+    static void RHO(ref ktype[stateSize] st, ref ktype t, size_t i)
     {
         size_t j = K_PI[i];
-        bc[0] = state[j];
-        state[j] = rol(t, K_RHO[i]);
-        t = bc[0];
+        ktype tmp = st[j];
+        st[j] = rol(t, K_RHO[i]);
+        t = tmp;
     }
-    
-    pragma(inline, true)
-    void CHI(size_t j)
-    {
-        bc[0] = state[j];
-        bc[1] = state[j + 1];
-        bc[2] = state[j + 2];
-        bc[3] = state[j + 3];
-        bc[4] = state[j + 4];
 
-        state[j]     ^= (~bc[1]) & bc[2];
-        state[j + 1] ^= (~bc[2]) & bc[3];
-        state[j + 2] ^= (~bc[3]) & bc[4];
-        state[j + 3] ^= (~bc[4]) & bc[0];
-        state[j + 4] ^= (~bc[0]) & bc[1];
+    pragma(inline, true)
+    static void CHI(ref ktype[stateSize] st, ref ktype[5] bc, size_t j)
+    {
+        bc[0] = st[j];
+        bc[1] = st[j + 1];
+        bc[2] = st[j + 2];
+        bc[3] = st[j + 3];
+        bc[4] = st[j + 4];
+
+        st[j]     ^= (~bc[1]) & bc[2];
+        st[j + 1] ^= (~bc[2]) & bc[3];
+        st[j + 2] ^= (~bc[3]) & bc[4];
+        st[j + 3] ^= (~bc[4]) & bc[0];
+        st[j + 4] ^= (~bc[0]) & bc[1];
     }
     
     version (BigEndian)
